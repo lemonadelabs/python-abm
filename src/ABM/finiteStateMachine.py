@@ -1,0 +1,68 @@
+'''
+Created on 2/09/2014
+
+@author: achim
+'''
+from .agentBase import agentBase
+
+class fsmSpecies(agentBase):
+    # a finite state machine species
+    # the base class provides:
+    # transition counter
+
+    # find state names, make enumeration
+    # enter, activity, leave
+    # and state name
+
+    def __init__(self):
+        agentBase.__init__(self)
+        self.state="" # find init state
+        self.nextState="start"
+        self.lastTransition=self.wallClock()
+        self.nextActivity=self.wallClock()
+        self.effort=0.0
+        self.__doFSMActions()
+
+    def __doFSMActions(self):
+        wallClock=self.wallClock()
+        if self.state!=self.nextState:
+            if wallClock>=self.nextActivity:
+                leaveMethod=getattr(self, "leave_"+self.state, None)
+                if leaveMethod is not None:
+                    leaveMethod()
+                enterMethod=getattr(self, "enter_"+self.nextState, None)
+                if enterMethod is not None:
+                    enterMethod()
+
+                # report transition
+                self.reportTransition(self.state, self.nextState, self.lastTransition, wallClock)
+                self.effort=0.0
+                
+                self.lastTransition=wallClock
+                self.state=self.nextState
+
+        if self.state=="end":
+            # make sure nothing happens anymore!
+            self.endLife()
+            return
+
+        # now do the activity!
+        activityMethod=getattr(self, "activity_"+self.state, None)
+        if activityMethod is not None:
+            activityMethod()
+            # and do some re-scheduling if required
+            self.schedule(max(wallClock, self.nextActivity), self.__doFSMActions)
+        
+    def scheduleTransition(self, nextState, transitionTime=0.0):
+        # report time and effort
+        self.nextActivity=transitionTime
+        self.nextState=nextState
+
+    def scheduleActivity(self, activityTime=0.0):
+        self.nextActivity=activityTime
+
+    def reportTransition(self, s1, s2, t1, t2):
+        pass
+
+    def addEffort(self, effort=0.0):
+        self.effort+=effort
