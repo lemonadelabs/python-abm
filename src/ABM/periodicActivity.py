@@ -8,8 +8,8 @@ from .agentBase import agentBase
 
 class periodicActivity(agentBase):
     
-    def __init__(self, period):
-        agentBase.__init__(self)
+    def __init__(self, theWorld, period):
+        agentBase.__init__(self, theWorld)
         self.setPeriod(period)
         self.__doActivity()
 

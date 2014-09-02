@@ -5,7 +5,7 @@ Created on 2/09/2014
 '''
 from .agentBase import agentBase
 
-class fsmSpecies(agentBase):
+class fsmAgent(agentBase):
     # a finite state machine species
     # the base class provides:
     # transition counter
@@ -14,12 +14,11 @@ class fsmSpecies(agentBase):
     # enter, activity, leave
     # and state name
 
-    def __init__(self):
-        agentBase.__init__(self)
+    def __init__(self, theWorld):
+        agentBase.__init__(self, theWorld)
         self.state="" # find init state
         self.nextState="start"
-        self.lastTransition=self.wallClock()
-        self.nextActivity=self.wallClock()
+        self.nextActivity=self.lastTransition=self.wallClock()
         self.effort=0.0
         self.__doFSMActions()
 
