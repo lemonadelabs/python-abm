@@ -14,7 +14,7 @@ class agentBase:
         self.myWorld=theWorld
         theWorld.addToWorld(self)
         self.mailbox=[]
-        
+    
     def endLife(self):
         # does not guarantee to delete the species
         self.myWorld.removeFromWorld(self)

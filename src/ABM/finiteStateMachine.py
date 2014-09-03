@@ -47,10 +47,13 @@ class fsmAgent(agentBase):
 
         # now do the activity!
         activityMethod=getattr(self, "activity_"+self.state, None)
+        
         if activityMethod is not None:
             activityMethod()
             # and do some re-scheduling if required
             self.schedule(max(wallClock, self.nextActivity), self.__doFSMActions)
+        else:
+            print("no state activity '{:s}' for {:s} no {:d}".format(self.state, type(self).__name__, self.agentId))
         
     def scheduleTransition(self, nextState, transitionTime=0.0):
         # report time and effort
