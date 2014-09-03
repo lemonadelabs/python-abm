@@ -13,16 +13,10 @@ import random
 class scheduler:
     # loosely follows the sched.scheduler implementation (well, it is anyway the obvious thing to do)
 
-    timeStep=30.0 # in seconds
-
     # what does a time step do?
     # governs the (re) evaluation of triggered activities
     # repetition time for generating new agents
     # events can be scheduled with higher precision (i.e. do not have to stick to multiples of time step), but their repetition time is limited to timeStep 
-
-    theWorld=None
-    schedule_heap=[]
-    heapq.heapify(schedule_heap)
 
     event=collections.namedtuple("event", ["timestamp", "method"])
     # do compare time stamps, but not methods
@@ -30,6 +24,11 @@ class scheduler:
     
     def __init__(self, theWorld):
         self.theWorld=theWorld
+
+        self.schedule_heap=[]
+        heapq.heapify(self.schedule_heap)
+
+        self.timeStep=30.0
         theWorld.updateWallClock(0.0)
     
     def addEvent(self, timestamp, target=None):
@@ -64,7 +63,6 @@ class scheduler:
             
             # collect all events within this time step
             nextWallClockTick=nextWallClockTick+self.timeStep
-
             while self.schedule_heap and self.schedule_heap[0][0] < nextWallClockTick:
 
                 theWorld.updateWallClock(self.schedule_heap[0][0])
@@ -78,6 +76,7 @@ class scheduler:
                 # randomize order
                 random.shuffle(exec_next)
                 for e in exec_next:
+                    #print(wallClock, e)
                     e()
             
             theWorld.updateWallClock(nextWallClockTick)

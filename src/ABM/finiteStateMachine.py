@@ -58,6 +58,7 @@ class fsmAgent(agentBase):
         self.nextState=nextState
 
     def scheduleActivity(self, activityTime=0.0):
+        #self.nextState=self.state
         self.nextActivity=activityTime
 
     def reportTransition(self, s1, s2, t1, t2):

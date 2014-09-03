@@ -5,36 +5,29 @@ Created on 2/09/2014
 '''
 
 import datetime
-import sys
 import itertools
 from .scheduler import scheduler
 
 class world:
     
     # contains the essentials of a agent based model simulation
-    
-    theScheduler=None
-    theAgents={}
-    agentIdCounter=0
-
-    wallClock=0.0
-    worldStart=None
-    theTopography=None # future
-    theLogger=None # near future
-    
+        
     def __init__(self):
 
         # time (real time)
         self.worldStart=datetime.datetime.now()
         self.wallClock=-1.0
         self.updateWallClock(0.0)
-        
         self.theScheduler=scheduler(self)
 
+        self.theAgents={}
+        self.agentIdCounter=0
+        
         # topography:
         # some object making/handling coordinates and put them into relation to area, to each other
-        
+        self.theTopography=None # future
         # the logger
+        self.theLogger=None # near future
 
     def updateWallClock(self, newClock):
         """ only used by scheduler!
