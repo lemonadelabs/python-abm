@@ -6,11 +6,8 @@ class fsmTest(fsmAgent):
     
     def __init__(self, theWorld):
         self.transitionEvents=[]
-        fsmAgent.__init__(self, theWorld)
+        fsmAgent.__init__(self, theWorld, "flip")
         
-    def enter_start(self):
-        self.scheduleTransition("flip")
-    
     def activity_flip(self):
         self.scheduleTransition("flop", self.wallClock()+30)
         

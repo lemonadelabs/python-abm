@@ -13,17 +13,27 @@ class hdfLogger:
     def __init__(self, logFileName):
         
         self.speciesTables={}
+        self.speciesRows={}
         
         # needing another place to flush the tables and close the file
-        self.theFile=tables.open_file(logFileName, "w")
+        self.theFile=tables.open_file(logFileName, "w", driver="H5FD_CORE")
         self.theFile.create_group("/", "transitionLogs")
     
         # create a table for messages
-    
+        # doesn't look smart in hdfview, but works out of the box
+        self.theLog=self.theFile.create_vlarray("/", "log", tables.VLStringAtom())
+        
     def __del__(self):
+        if hasattr(self, "speciesTables"):
+            for table in self.speciesTables.values():
+                table.flush()
+            if hasattr(self, "speciesRows"):
+                del self.speciesRows
+            del self.speciesTables
+        
         if hasattr(self, "theFile"):
             self.theFile.close()
-    
+
     def reportTransition(self, agent, s1, s2, t1, t2):
         if not isinstance(agent, fsmAgent):
             raise TypeError("{:s} is not an fsmAgent".format(str(agent)))
@@ -51,9 +61,12 @@ class hdfLogger:
 
             # needing another place to flush the tables and close the file
             
-            self.speciesTables[agentType]=self.theFile.createTable("/transitionLogs", str(agentType.__name__), transitions)
+            theTable=self.theFile.createTable("/transitionLogs", agentType.__name__, transitions)
+            self.speciesTables[agentType]=theTable
+            self.speciesRows[agentType]=theTable.row
+            self.logMessage("allocated transition table for {:s}".format(agentType.__name__))
 
-        theTransition=self.speciesTables[agentType].row
+        theTransition=self.speciesRows[agentType]
         theTransition["agentId"]=agent.agentId
         theTransition["timeStamp"]=t2
         theTransition["fromState"]=self.stateEnum[s1 if s1 else "start"]
@@ -63,5 +76,5 @@ class hdfLogger:
         # fill in the values
         theTransition.append()
     
-    def logMessage(self):
-        pass
+    def logMessage(self, message):
+        self.theLog.append(str(message))

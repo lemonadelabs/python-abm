@@ -38,8 +38,11 @@ class vehicleOwner(ABM.fsmAgent):
         self.scheduleTransition("queue", 0.0)
 
     def activity_queue(self):
-        self.scheduleTransition("fileFormOrReminder", 0.0)
-
+        if random.random()<0.9:
+            self.scheduleTransition("fileFormOrReminder", 0.0)
+        else:
+            self.scheduleTransition("haveAComputerAvailable", 0.0)
+        
     def activity_fileFormOrReminder(self):
         self.scheduleTransition("payFeeAtAgent", 0.0)
         
@@ -77,18 +80,46 @@ class vehicleOwner(ABM.fsmAgent):
         logger=self.myWorld.theLogger
         if logger is not None:
             logger.reportTransition(self, s1, s2, t1, t2)
-        #print(t2, s2)
-        #ABM.fsmAgent.reportTransition(self, s1, s2, t1, t2)
+
+class amiirOwner(vehicleOwner):
+    pass
+
+class nikkiOwner(vehicleOwner):
+    pass
+
+class chrisOwner(vehicleOwner):
+    pass
+
+class julianOwner(vehicleOwner):
+    pass
+
+class ningOwner(vehicleOwner):
+    pass
+
+class fredOwner(vehicleOwner):
+    pass
+
+class shonaOwner(vehicleOwner):
+    pass
+
+class maryOwner(vehicleOwner):
+    pass
+
+class toyotaCompany(vehicleOwner):
+    pass
+
+class fonterraDriver(vehicleOwner):
+    pass
 
 def generatePopulation(mvlWorld):
     
     # some probability distributions to sample from
+    allSegments=[c for c in globals().values() if type(c) is type and c is not vehicleOwner and issubclass(c, vehicleOwner)]
     
-    for i in range(10000):
+    for _ in range(1000):
         # todo: supply customer type and vehicle number
         # schedule licenses
-        
-        v=vehicleOwner(mvlWorld)
+        v=random.choice(allSegments)(mvlWorld)
         v.licenseEnds=[random.uniform(4,30)*24*3600]
 
 def main():

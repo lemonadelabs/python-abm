@@ -14,10 +14,10 @@ class fsmAgent(agentBase):
     # enter, activity, leave
     # and state name
 
-    def __init__(self, theWorld):
+    def __init__(self, theWorld, startState="start"):
         agentBase.__init__(self, theWorld)
-        self.state="" # find init state
-        self.nextState="start"
+        self.state="start"
+        self.nextState=startState
         self.nextActivity=self.lastTransition=self.wallClock()
         self.effort=0.0
         self.__doFSMActions()
