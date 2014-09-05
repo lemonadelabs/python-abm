@@ -106,8 +106,11 @@ def generateAvgDwellTimes(transitionFile):
 
     theFile.close()
 
-    # convert into avg and change names        
+    # convert into avg and change names
     return dict([(s, sdt/nDwellTimes[s]) for s,sdt in sumDwellTimes.items()])
+
+def channelUsage(theFile):
+    pass
 
 def generateSQL(theFile):
     runID=os.path.splitext(os.path.basename(theFile))[0]
@@ -120,6 +123,9 @@ def generateSQL(theFile):
   `count` INT NULL
   )"""
     print(tableDef,';')
+
+    tableClear="""DELETE FROM `postproc_transitions` WHERE experimentID='{0:s}'"""
+    print(tableClear.format(runID), ";")
 
     for (a, s1, s2), n in generateTransitionCounts(theFile).items():
         print("INSERT INTO `postproc_transitions` "
@@ -134,6 +140,9 @@ def generateSQL(theFile):
   `avgdwelltime` INT NULL
   )"""
     print(tableDef,";")
+
+    tableClear="""DELETE FROM `postproc_avgdwelltimes` WHERE experimentID='{0:s}'"""
+    print(tableClear.format(runID), ";")
 
     for (a, s), dt in generateAvgDwellTimes(theFile).items():
         print("INSERT INTO `postproc_avgdwelltimes` "
