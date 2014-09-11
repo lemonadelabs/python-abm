@@ -116,20 +116,25 @@ def generatePopulation(mvlWorld):
     # some probability distributions to sample from
     allSegments=[c for c in globals().values() if type(c) is type and c is not vehicleOwner and issubclass(c, vehicleOwner)]
     
-    for _ in range(1000):
+    for _ in range(10000):
         # todo: supply customer type and vehicle number
         # schedule licenses
         v=random.choice(allSegments)(mvlWorld)
         v.licenseEnds=[random.uniform(4,30)*24*3600]
 
+class motorVehicleLicensing(ABM.world):
+    
+    def __init__(self, params):
+        # handle all the parameters!
+        ABM.world.__init__(self)
+        generatePopulation(self)
+        
+
 def main():
     
-    mvlWorld=ABM.world()
+    mvlWorld=motorVehicleLicensing({})
     mvlWorld.theLogger=ABM.hdfLogger("test.h5")
-    generatePopulation(mvlWorld)
-
-    mvlWorld.theScheduler.eventLoop(30*24*3600)
-    
+    mvlWorld.theScheduler.eventLoop(30*24*3600)    
     mvlWorld.theLogger=None
 
 if __name__=="__main__":

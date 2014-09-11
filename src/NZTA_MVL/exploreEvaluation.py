@@ -8,7 +8,7 @@ import sys
 import os.path
 import tables
 
-def iterJourneys(transitionFile, agentTypeName):
+def iterCustomerJourneys(transitionFile, agentTypeName):
     theFile=tables.open_file(transitionFile, "r")
     transitionTable=theFile.get_node("/transitionLogs", agentTypeName)
 
@@ -75,6 +75,7 @@ def generateAvgDwellTimes(transitionFile):
     
     transitionGroup=theFile.get_node("/transitionLogs")
     sumDwellTimes={}
+    sumEffort={}
     nDwellTimes={}
     for tt in transitionGroup:
         if isinstance(tt, tables.Table):
@@ -88,29 +89,60 @@ def generateAvgDwellTimes(transitionFile):
             for transition in transitionTable.iterrows():
                 fromState=statesEnum(transition["fromState"])
                 dt=transition["dwellTime"]
+                effort=transition["effort"]
                 state=(agentTypeName, fromState)
                 if state not in nDwellTimes:
                     sumDwellTimes[state]=dt
+                    sumEffort[state]=effort
                     nDwellTimes[state]=1
                 else:
                     sumDwellTimes[state]+=dt
+                    sumEffort[state]+=effort
                     nDwellTimes[state]+=1
 
                 state=("all", fromState)
                 if state not in nDwellTimes:
                     sumDwellTimes[state]=dt
+                    sumEffort[state]=effort
                     nDwellTimes[state]=1
                 else:
                     sumDwellTimes[state]+=dt
+                    sumEffort[state]+=effort
                     nDwellTimes[state]+=1
 
     theFile.close()
 
     # convert into avg and change names
-    return dict([(s, sdt/nDwellTimes[s]) for s,sdt in sumDwellTimes.items()])
+    # todo: annualizing
+    return dict([(key, (sumDwellTimes[key]/n, sumEffort[key]/n)) for key,n in nDwellTimes.items()])
 
-def channelUsage(theFile):
-    pass
+def generateChannelUsage(theFile):
+    
+    channelUsage={}
+    for agentTypeName in ['amiirOwner', 'chrisOwner', 'fonterraDriver', 'fredOwner', 'julianOwner',
+                          'maryOwner', 'nikkiOwner', 'ningOwner', 'shonaOwner', 'toyotaCompany']:
+
+        # todo: check whether there is an agent like that...
+    
+        onlineState="fillFormOnline"
+        agentState="fileFormOrReminder"
+    
+        for t0, agentId, journey in iterCustomerJourneys(theFile, agentTypeName):
+            states, dwelltimes, efforttimes = zip(*journey)
+            
+            channel=""
+            
+            if onlineState in states:
+                channel="online"
+            elif agentState in states:
+                channel="agent"
+            else:
+                pass # incomplete journey...
+
+            for key in ((agentTypeName, channel), ("all", channel), (agentTypeName, "all"), ("all", "all")):
+                channelUsage[key]=channelUsage.get(key, 0)+1
+
+    return channelUsage
 
 def generateSQL(theFile):
     runID=os.path.splitext(os.path.basename(theFile))[0]
@@ -119,6 +151,7 @@ def generateSQL(theFile):
   `experimentID` CHAR(32) NOT NULL,
   `startState` VARCHAR(45) NULL,
   `endState` VARCHAR(45) NULL,
+  `channel` VARCHAR(45) NULL,
   `persona` VARCHAR(45) NULL,
   `count` INT NULL
   )"""
@@ -129,32 +162,43 @@ def generateSQL(theFile):
 
     for (a, s1, s2), n in generateTransitionCounts(theFile).items():
         print("INSERT INTO `postproc_transitions` "
-              "(`experimentID`, `startState`, `endState`, `persona`, `count`) VALUES "
-              "('{0:s}',        '{1:s}',      '{2:s}',    '{3:s}',    {4:d})".format(runID, s1, s2, a, n),";")
-
+              "(`experimentID`, `startState`, `endState`, `channel`, `persona`, `count`) VALUES "
+              "('{0:s}',        '{1:s}',      '{2:s}',    '{4:s}',   '{3:s}',    {5:d})".format(runID, s1, s2, "all", a, n),";")
 
     tableDef="""CREATE TABLE IF NOT EXISTS `postproc_avgdwelltimes` (
   `experimentID` CHAR(32) NOT NULL,
   `state` VARCHAR(45) NULL,
   `persona` VARCHAR(45) NULL,
-  `avgdwelltime` INT NULL
+  `channel` VARCHAR(45) NULL,
+  `avgdwelltime` FLOAT NULL,
+  `avgeffort` FLOAT NULL
   )"""
     print(tableDef,";")
 
     tableClear="""DELETE FROM `postproc_avgdwelltimes` WHERE experimentID='{0:s}'"""
     print(tableClear.format(runID), ";")
 
-    for (a, s), dt in generateAvgDwellTimes(theFile).items():
+    for (a, s), (dt, effort) in generateAvgDwellTimes(theFile).items():
         print("INSERT INTO `postproc_avgdwelltimes` "
-              "(`experimentID`, `state`, `persona`, `avgdwelltime`) VALUES "
-              "('{0:s}', '{1:s}',      '{2:s}',     '{3:f}')".format(runID, s, a, dt),";")
+              "(`experimentID`, `state`, `persona`, `channel`, `avgdwelltime`, `avgeffort`) VALUES "
+              "('{0:s}', '{1:s}',      '{2:s}',     '{3:s}',  {4:f},           {5:f})".format(runID, s, a, "all", dt, effort),";")
+
+    tableDef="""CREATE TABLE IF NOT EXISTS `postproc_channelusage` (
+  `experimentID` CHAR(32) NOT NULL,
+  `channel` VARCHAR(45) NULL,
+  `persona` VARCHAR(45) NULL,
+  `count` INT NULL
+  )"""
+    print(tableDef,";")
+
+    tableClear="""DELETE FROM `postproc_channelusage` WHERE experimentID='{0:s}'"""
+    print(tableClear.format(runID), ";")
+    
+    for (a, c), n in generateChannelUsage(theFile).items():
+        print("INSERT INTO `postproc_channelusage` "
+              "(`experimentID`, `persona`, `channel`, `count`) VALUES "
+              "('{0:s}',        '{1:s}',   '{2:s}',   {3:d})".format(runID, a, c, n),";")
 
 if __name__ == '__main__':
     generateSQL(sys.argv[1])
 
-#     #print(tt)
-#     tt=iterJourneys(theFile, "maryOwner")
-#     for i,t, journey in tt:
-#         print(i)
-#     del tt
-    
