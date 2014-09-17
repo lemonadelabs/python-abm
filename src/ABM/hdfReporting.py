@@ -24,15 +24,18 @@ class hdfLogger:
         self.theLog=self.theFile.create_vlarray("/", "log", tables.VLStringAtom())
         
     def __del__(self):
+        if hasattr(self, "speciesRows"):
+            del self.speciesRows
         if hasattr(self, "speciesTables"):
-            for table in self.speciesTables.values():
-                table.flush()
-            if hasattr(self, "speciesRows"):
-                del self.speciesRows
+            for v in self.speciesTables.values():
+                v.close()
             del self.speciesTables
-        
+        if hasattr(self, "theLog"):
+            self.theLog.close()
+            del self.theLog
         if hasattr(self, "theFile"):
             self.theFile.close()
+            del self.theFile
 
     def reportTransition(self, agent, s1, s2, t1, t2):
         if not isinstance(agent, fsmAgent):
@@ -75,6 +78,7 @@ class hdfLogger:
         theTransition["effort"]=agent.effort
         # fill in the values
         theTransition.append()
+        del theTransition
     
     def logMessage(self, message):
         self.theLog.append(str(message))
