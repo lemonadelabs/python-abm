@@ -9,6 +9,12 @@ import types
 from ABM import fsmAgent
 
 class hdfLogger:
+
+    class parameterTableFormat(tables.IsDescription):
+        # inherits the limits of the ABMsimulations.parameters table
+        varName=tables.StringCol(64) #@UndefinedVariable
+        varType=tables.EnumCol(tables.Enum(["INT", "FLOAT", "BOOL", "STR", "RUN"]), "STR", "uint8") #@UndefinedVariable
+        varValue=tables.StringCol(128) #@UndefinedVariable
     
     def __init__(self, logFileName):
         
@@ -23,41 +29,35 @@ class hdfLogger:
         # doesn't look smart in hdfview, but works out of the box
         self.theLog=self.theFile.create_vlarray("/", "log", tables.VLStringAtom())
 
-    class parameterTable(tables.IsDescription):
-        # inherits the limits of the ABMsimulations.parameters table
-        varname=tables.StringCol(64) #@UndefinedVariable
-        varType=tables.EnumCol(tables.Enum(["INT", "FLOAT", "BOOL", "STR", "RUN"])) #@UndefinedVariable
-        varValue=tables.StringCol(128) #@UndefinedVariable
-
     def writeParameters(self, parameters, runParameters={}):
         # create a table for it?!
         # pretty much like a parameters table?!
         # or pickle an object?!
-        parametersTable=self.theFile.createTable("/", "parameters", hdfLogger.parameterTable)
-        parametersRow=parametersTable.row()
+        parameterTable=self.theFile.createTable("/", "parameters", hdfLogger.parameterTableFormat)
+        parameterRow=parameterTable.row
         
-        varTypeEnum=hdfLogger.parameterTable.varType
-        varTypeDict={varTypeEnum["INT"]:int,
-                    varTypeEnum["STR"]:str,
-                    varTypeEnum["FLOAT"]:float,
-                    varTypeEnum["BOOL"]:bool}
+        varTypeEnum=parameterTable.coldescrs["varType"].enum
+        varTypeDict={int:   varTypeEnum["INT"],
+                     str:   varTypeEnum["STR"],
+                     float: varTypeEnum["FLOAT"],
+                     bool:  varTypeEnum["BOOL"]}
         runType=varTypeEnum["RUN"]
         
         for k,v in parameters.items():
             varType=varTypeDict[type(v)]
-            parametersRow["varName"]=str(k)
-            parametersRow["varType"]=varType
-            parametersRow["varValue"]=str(v)
-            parametersRow.append()
+            parameterRow["varName"]=str(k)
+            parameterRow["varType"]=varType
+            parameterRow["varValue"]=str(v)
+            parameterRow.append()
             
         for k,v in runParameters.items():
-            parametersRow["varName"]=str(k)
-            parametersRow["varType"]=runType
-            parametersRow["varValue"]=str(v)
-            parametersRow.append()
+            parameterRow["varName"]=str(k)
+            parameterRow["varType"]=runType
+            parameterRow["varValue"]=str(v)
+            parameterRow.append()
         
-        del parametersRow
-        parametersTable.close()
+        del parameterRow
+        parameterTable.close()
         
     def __del__(self):
         if hasattr(self, "speciesRows"):
