@@ -22,6 +22,42 @@ class hdfLogger:
         # create a table for messages
         # doesn't look smart in hdfview, but works out of the box
         self.theLog=self.theFile.create_vlarray("/", "log", tables.VLStringAtom())
+
+    class parameterTable(tables.IsDescription):
+        # inherits the limits of the ABMsimulations.parameters table
+        varname=tables.StringCol(64) #@UndefinedVariable
+        varType=tables.EnumCol(tables.Enum(["INT", "FLOAT", "BOOL", "STR", "RUN"])) #@UndefinedVariable
+        varValue=tables.StringCol(128) #@UndefinedVariable
+
+    def writeParameters(self, parameters, runParameters={}):
+        # create a table for it?!
+        # pretty much like a parameters table?!
+        # or pickle an object?!
+        parametersTable=self.theFile.createTable("/", "parameters", hdfLogger.parameterTable)
+        parametersRow=parametersTable.row()
+        
+        varTypeEnum=hdfLogger.parameterTable.varType
+        varTypeDict={varTypeEnum["INT"]:int,
+                    varTypeEnum["STR"]:str,
+                    varTypeEnum["FLOAT"]:float,
+                    varTypeEnum["BOOL"]:bool}
+        runType=varTypeEnum["RUN"]
+        
+        for k,v in parameters.items():
+            varType=varTypeDict[type(v)]
+            parametersRow["varName"]=str(k)
+            parametersRow["varType"]=varType
+            parametersRow["varValue"]=str(v)
+            parametersRow.append()
+            
+        for k,v in runParameters.items():
+            parametersRow["varName"]=str(k)
+            parametersRow["varType"]=runType
+            parametersRow["varValue"]=str(v)
+            parametersRow.append()
+        
+        del parametersRow
+        parametersTable.close()
         
     def __del__(self):
         if hasattr(self, "speciesRows"):
