@@ -8,7 +8,7 @@ import collections
 
 class agentBase:    
     
-    message=collections.namedtuple("message", ["timestamp", "agent", "message"])
+    message=collections.namedtuple("message", ["timestamp", "sender", "content"])
 
     def __init__(self, theWorld):
         self.myWorld=theWorld
@@ -21,6 +21,19 @@ class agentBase:
         self.myWorld=None
 
     # todo: mailbox methods
+    def sendMessage(self, recipient, content):
+        # many recipients?
+        recipient.mailbox.append(agentBase.message(timestamp=self.wallClock(),
+                                                   sender=self,
+                                                   content=content))
+    
+    def getNextMessage(self, senderType=None):
+        if len(self.mailbox)==0:
+            return None
+        if senderType is None:
+            return self.mailbox.pop(0)
+        # get next message, but sender specific
+        return next((m for m in self.mailbox if isinstance(m.sender, senderType)), None)
     
     def schedule(self, newTime, target):
         self.myWorld.theScheduler.addEvent(newTime, target)
