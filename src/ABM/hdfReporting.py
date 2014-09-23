@@ -33,7 +33,7 @@ class hdfLogger:
         # create a table for it?!
         # pretty much like a parameters table?!
         # or pickle an object?!
-        parameterTable=self.theFile.createTable("/", "parameters", hdfLogger.parameterTableFormat)
+        parameterTable=self.theFile.create_table("/", "parameters", hdfLogger.parameterTableFormat)
         parameterRow=parameterTable.row
         
         varTypeEnum=parameterTable.coldescrs["varType"].enum
@@ -100,7 +100,7 @@ class hdfLogger:
 
             # needing another place to flush the tables and close the file
             
-            theTable=self.theFile.createTable("/transitionLogs", agentType.__name__, transitions)
+            theTable=self.theFile.create_table("/transitionLogs", agentType.__name__, transitions)
             self.speciesTables[agentType]=theTable
             self.speciesRows[agentType]=theTable.row
             self.logMessage("allocated transition table for {:s}".format(agentType.__name__))
