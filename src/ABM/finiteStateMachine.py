@@ -69,3 +69,10 @@ class fsmAgent(agentBase):
 
     def addEffort(self, effort=0.0):
         self.effort+=effort
+
+    def endLife(self):
+        # also modify the worldremoveAgent method
+        self.myWorld.theAgents[type(self)].remove(self)
+
+        # override endLife method of agentBase
+        self.myWorld=None
