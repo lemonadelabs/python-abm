@@ -26,14 +26,17 @@ class agentBase:
         recipient.mailbox.append(agentBase.message(timestamp=self.wallClock(),
                                                    sender=self,
                                                    content=content))
-    
+
     def getNextMessage(self, senderType=None):
-        if len(self.mailbox)==0:
+        if not self.mailbox:
             return None
         if senderType is None:
             return self.mailbox.pop(0)
         # get next message, but sender specific
-        return next((m for m in self.mailbox if isinstance(m.sender, senderType)), None)
+        theMessage=next((m for m in self.mailbox if isinstance(m.sender, senderType)), None)
+        if theMessage is not None:
+            self.mailbox.remove(theMessage)
+        return theMessage
     
     def schedule(self, newTime, target):
         self.myWorld.theScheduler.addEvent(newTime, target)
