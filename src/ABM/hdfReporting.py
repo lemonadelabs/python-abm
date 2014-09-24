@@ -5,6 +5,7 @@ Created on 2/09/2014
 '''
 import tables
 import types
+import numpy
 
 from ABM import fsmAgent
 
@@ -22,12 +23,18 @@ class hdfLogger:
         self.speciesRows={}
         
         # needing another place to flush the tables and close the file
-        self.theFile=tables.open_file(logFileName, "w", driver="H5FD_CORE")
+        self.theFile=tables.open_file(logFileName, "w") #, driver="H5FD_CORE")
         self.theFile.create_group("/", "transitionLogs")
     
         # create a table for messages
         # doesn't look smart in hdfview, but works out of the box
-        self.theLog=self.theFile.create_vlarray("/", "log", tables.VLStringAtom())
+        #self.theLog=self.theFile.create_vlarray("/", "log", tables.VLStringAtom())
+        self.theLog=self.theFile.create_earray(where=self.theFile.root,
+                                               name="log",
+                                               atom=tables.StringAtom(itemsize=120),
+                                               shape=(0,),
+                                               title="log messages",
+                                               filters=tables.Filters(complevel=9, complib='zlib'))
 
     def writeParameters(self, parameters, runParameters={}):
         # create a table for it?!
@@ -117,4 +124,6 @@ class hdfLogger:
         del theTransition
     
     def logMessage(self, message):
-        self.theLog.append(str(message))
+        #for l in logtext.splitlines():
+        #        dump_file.root.log.append()
+        self.theLog.append(numpy.array([message], dtype="S120"))
