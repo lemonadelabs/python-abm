@@ -15,7 +15,8 @@ class world:
     def __init__(self):
 
         # time (real time)
-        self.worldStart=datetime.datetime.now()
+        #self.worldStart=datetime.datetime.now()
+        self.worldStart=datetime.datetime(2014, 6, 1) # is a Monday
         self.wallClock=-1.0
         self.updateWallClock(0.0)
         self.theScheduler=scheduler(self)
@@ -37,11 +38,11 @@ class world:
             raise ValueError("wall clock can't be set backwards")
 
         if self.wallClock<newClock:
-            self.wallClock=newClock
+            self.wallClock=float(newClock)
             # update daytime, week day, month...
             #make a daytime object out of it
             if self.worldStart is not None:
-                c=self.worldClock=self.worldStart+datetime.timedelta(seconds=newClock)
+                c=self.worldClock=self.worldStart+newClock*datetime.timedelta(seconds=1)
                 # update weekday, time
                 self.daytime=c.time()
                 self.date=c.date()

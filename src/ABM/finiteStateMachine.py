@@ -3,6 +3,8 @@ Created on 2/09/2014
 
 @author: achim
 '''
+
+import sys
 from .agentBase import agentBase
 
 class fsmAgent(agentBase):
@@ -41,8 +43,11 @@ class fsmAgent(agentBase):
                 self.state=self.nextState
 
         if self.state=="end":
+            leaveMethod=None
+            enterMethod=None
             # make sure nothing happens anymore!
             self.endLife()
+            #print(sys.getrefcount(self)) # <- this should be 3
             return
 
         # now do the activity!
@@ -51,7 +56,7 @@ class fsmAgent(agentBase):
         if activityMethod is not None:
             activityMethod()
             # and do some re-scheduling if required
-            self.schedule(max(wallClock, self.nextActivity), self.__doFSMActions)
+            self.schedule(self.nextActivity, self.__doFSMActions)
         else:
             print("no state activity '{:s}' for {:s} no {:d}".format(self.state, type(self).__name__, self.agentId))
         
@@ -70,9 +75,11 @@ class fsmAgent(agentBase):
     def addEffort(self, effort=0.0):
         self.effort+=effort
 
-    def endLife(self):
+    def _endLife(self):
+        self.mailbox=[]
         # also modify the worldremoveAgent method
         self.myWorld.theAgents[type(self)].remove(self)
 
         # override endLife method of agentBase
         self.myWorld=None
+        #print(sys.getrefcount(self))

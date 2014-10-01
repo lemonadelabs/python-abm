@@ -28,14 +28,12 @@ class scheduler:
         heapq.heapify(self.schedule_heap)
 
         self.timeStep=30.0
+        assert(self.timeStep>0)
         theWorld.updateWallClock(0.0)
     
-    def addEvent(self, timestamp, target=None):
-        wallClock=self.theWorld.wallClock
-        if timestamp<wallClock:
-            raise ValueError("timestamp<wallClock")
-        if not math.isinf(timestamp):
-            heapq.heappush(self.schedule_heap, self.event(max(wallClock+self.timeStep, timestamp), target))
+    def addEvent(self, timestamp, target):
+        if not (math.isinf(timestamp) and timestamp>0):
+            heapq.heappush(self.schedule_heap, self.event(max(self.theWorld.wallClock+self.timeStep, timestamp), target))
         
     def removeAgentFromScheduler(self, theAgent):
         # be prepared for non class methods as well?
@@ -67,6 +65,7 @@ class scheduler:
                 theWorld.updateWallClock(self.schedule_heap[0][0])
                 wallClock=theWorld.wallClock
 
+                # todo: think about using the fused heap pop/push operation
                 exec_next=[heapq.heappop(self.schedule_heap)[1]]
                 while self.schedule_heap and self.schedule_heap[0][0]==wallClock:
                     exec_next.append(heapq.heappop(self.schedule_heap)[1])
@@ -74,9 +73,8 @@ class scheduler:
                 # ok, execute them now (no threads... by now)
                 # randomize order
                 random.shuffle(exec_next)
-                for e in exec_next:
-                    #print(wallClock, e)
-                    e()
+                while exec_next:
+                    exec_next.pop()()
             
             theWorld.updateWallClock(nextWallClockTick)
             wallClock=theWorld.wallClock

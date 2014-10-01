@@ -5,6 +5,7 @@ Created on 2/09/2014
 '''
 
 import collections
+import sys
 
 class agentBase:    
     
@@ -16,6 +17,7 @@ class agentBase:
         self.mailbox=[]
     
     def endLife(self):
+        self.mailbox=[]
         # does not guarantee to delete the species
         self.myWorld.removeFromWorld(self)
         self.myWorld=None
