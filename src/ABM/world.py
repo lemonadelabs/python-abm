@@ -16,7 +16,7 @@ class world:
 
         # time (real time)
         #self.worldStart=datetime.datetime.now()
-        self.worldStart=datetime.datetime(2014, 6, 1) # is a Monday
+        self.worldStart=datetime.datetime(2014, 9, 1) # is a Monday
         self.wallClock=-1.0
         self.updateWallClock(0.0)
         self.theScheduler=scheduler(self)
