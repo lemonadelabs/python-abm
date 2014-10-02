@@ -22,7 +22,7 @@ class fsmAgent(agentBase):
         self.nextState=startState
         self.nextActivity=self.lastTransition=self.wallClock()
         self.effort=0.0
-        self.__doFSMActions()
+        theWorld.theScheduler.addEvent(self.__doFSMActions(), self.__doFSMActions)
 
     def __doFSMActions(self):
         wallClock=self.wallClock()
@@ -56,7 +56,7 @@ class fsmAgent(agentBase):
         if activityMethod is not None:
             activityMethod()
             # and do some re-scheduling if required
-            self.schedule(self.nextActivity, self.__doFSMActions)
+            return self.nextActivity
         else:
             print("no state activity '{:s}' for {:s} no {:d}".format(self.state, type(self).__name__, self.agentId))
         
@@ -75,7 +75,7 @@ class fsmAgent(agentBase):
     def addEffort(self, effort=0.0):
         self.effort+=effort
 
-    def _endLife(self):
+    def endLife(self):
         self.mailbox=[]
         # also modify the worldremoveAgent method
         self.myWorld.theAgents[type(self)].remove(self)

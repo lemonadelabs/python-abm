@@ -11,11 +11,11 @@ class periodicActivity(agentBase):
     def __init__(self, theWorld, period):
         agentBase.__init__(self, theWorld)
         self.setPeriod(period)
-        self.__doActivity()
+        theWorld.theScheduler.addEvent(self.__doActivity(), self.__doActivity)
 
     def __doActivity(self):
         self.activity()
-        self.schedule(self.wallClock()+self.period, self.__doActivity)
+        return self.wallClock()+self.period
 
     def setPeriod(self, newPeriod):
         # todo: doesn't reschedule immediately
