@@ -21,6 +21,7 @@ class hdfLogger:
         
         self.speciesTables={}
         self.speciesRows={}
+        self.speciesEnum={}
         
         # needing another place to flush the tables and close the file
         self.theFile=tables.open_file(logFileName, "w") #, driver="H5FD_CORE")
@@ -97,7 +98,9 @@ class hdfLogger:
                     if type(attr_object) is types.MethodType:
                         stateNames.add(attr_name)
 
-            type(self).stateEnum=stateEnum=tables.Enum(list(stateNames))
+            stateNames=list(stateNames)
+            stateNames.sort()
+            self.speciesEnum[agentType]=stateEnum=tables.Enum(stateNames)
             transitions=type("transitions", (tables.IsDescription,), {"timeStamp": tables.Float64Col(), # @UndefinedVariable
                                                                       "fromState": tables.EnumCol(stateEnum, "start", "uint16"), # @UndefinedVariable
                                                                       "toState": tables.EnumCol(stateEnum, "start", "uint16"), # @UndefinedVariable
@@ -105,18 +108,18 @@ class hdfLogger:
                                                                       "effort": tables.Float32Col(),   # @UndefinedVariable
                                                                       "agentId": tables.UInt64Col()})  # @UndefinedVariable
 
-            # needing another place to flush the tables and close the file
-            
             theTable=self.theFile.create_table("/transitionLogs", agentType.__name__, transitions)
             self.speciesTables[agentType]=theTable
-            self.speciesRows[agentType]=theTable.row
+            theTransition=self.speciesRows[agentType]=theTable.row
             self.logMessage("allocated transition table for {:s}".format(agentType.__name__))
-
-        theTransition=self.speciesRows[agentType]
+        else:
+            stateEnum=self.speciesEnum[agentType]
+            theTransition=self.speciesRows[agentType]
+            
         theTransition["agentId"]=agent.agentId
         theTransition["timeStamp"]=t2
-        theTransition["fromState"]=self.stateEnum[s1 if s1 else "start"]
-        theTransition["toState"]=self.stateEnum[s2 if s2 else "start"]
+        theTransition["fromState"]=stateEnum[s1 if s1 else "start"]
+        theTransition["toState"]=stateEnum[s2 if s2 else "start"]
         theTransition["dwellTime"]=t2-t1
         theTransition["effort"]=agent.effort
         # fill in the values
