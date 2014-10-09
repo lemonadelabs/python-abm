@@ -31,13 +31,16 @@ class fsmAgent(agentBase):
                 leaveMethod=getattr(self, "leave_"+self.state, None)
                 if leaveMethod is not None:
                     leaveMethod()
+
+                # report transition
+                if hasattr(self, "reportTransition"):
+                    self.reportTransition(self.state, self.nextState, self.lastTransition, wallClock)
+                self.effort=0.0
+                
                 enterMethod=getattr(self, "enter_"+self.nextState, None)
                 if enterMethod is not None:
                     enterMethod()
 
-                # report transition
-                self.reportTransition(self.state, self.nextState, self.lastTransition, wallClock)
-                self.effort=0.0
                 
                 self.lastTransition=wallClock
                 self.state=self.nextState
@@ -68,9 +71,6 @@ class fsmAgent(agentBase):
     def scheduleActivity(self, activityTime=0.0):
         #self.nextState=self.state
         self.nextActivity=activityTime
-
-    def reportTransition(self, s1, s2, t1, t2):
-        pass
 
     def addEffort(self, effort=0.0):
         self.effort+=effort
