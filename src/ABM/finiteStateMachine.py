@@ -4,7 +4,6 @@ Created on 2/09/2014
 @author: achim
 '''
 
-import sys
 from .agentBase import agentBase
 
 class fsmAgent(agentBase):
@@ -22,7 +21,7 @@ class fsmAgent(agentBase):
         self.nextState=startState
         self.nextActivity=self.lastTransition=self.wallClock()
         self.effort=0.0
-        theWorld.theScheduler.addEvent(self.__doFSMActions(), self.__doFSMActions)
+        theWorld.theScheduler.addEvent(0.0, self.__doFSMActions)
 
     def __doFSMActions(self):
         wallClock=self.wallClock()
@@ -41,7 +40,6 @@ class fsmAgent(agentBase):
                 if enterMethod is not None:
                     enterMethod()
 
-                
                 self.lastTransition=wallClock
                 self.state=self.nextState
 
