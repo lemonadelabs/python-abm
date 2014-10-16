@@ -82,11 +82,12 @@ class scheduler:
                 continue
             
             if theHeap and timeStamp>theHeap[0][0]:
-                # get a new one
+                # get a new one, which might be inserted from the last time step fill up
                 timeStamp, _, exec_next=heapq.heappushpop(theHeap, (timeStamp, id(exec_next), exec_next))
                 continue
 
             if timeStamp>nextWallClockTick:
+                # start over with next wall clock tick
                 continue
 
             if timeStamp>wallClock:
@@ -94,20 +95,37 @@ class scheduler:
                 wallClock=theWorld.wallClock
 
             try:
+                # do the work!
                 retval=exec_next()
             except Exception as e:
                 raise
                 print(str(e))
                 exec_next=None
                 retval=None
-                    
+
             if retval is not None:
                 if type(retval) in [float, int]:
                     timeStamp=max(wallClock+self.timeStep, float(retval))
-                    timeStamp, _, exec_next=heapq.heappushpop(theHeap, (timeStamp, id(exec_next), exec_next))
+                    if math.isfinite(timeStamp):
+                        timeStamp, _, exec_next=heapq.heappushpop(theHeap, (timeStamp, id(exec_next), exec_next))
+                    else:
+                        # ignore this event
+                        if theHeap:
+                            timeStamp, _, exec_next=heapq.heappop(theHeap)
+                        else:
+                            timeStamp=None
+                            exec_next=None
                 elif type(retval) is tuple:
                     timeStamp=max(wallClock+self.timeStep, float(retval[0]))
-                    timeStamp, _, exec_next=heapq.heappushpop(theHeap, (timeStamp, id(exec_next), retval[1]))
+                    if math.isfinite(timeStamp):
+                        timeStamp, _, exec_next=heapq.heappushpop(theHeap, (timeStamp, id(exec_next), retval[1]))
+                    else:
+                        # ignore this event
+                        if theHeap:
+                            timeStamp, _, exec_next=heapq.heappop(theHeap)
+                        else:
+                            timeStamp=None
+                            exec_next=None
                 else:
                     raise ValueError("unexpected return value from event function")
             else:
@@ -117,6 +135,8 @@ class scheduler:
                     timeStamp=None
                     exec_next=None
 
+        # end of while loop!
+        
         if exec_next is not None:
             # push that element back
             heapq.heappush(theHeap, (timeStamp, id(exec_next), exec_next))
