@@ -1,12 +1,12 @@
 import unittest
 
-from ABM import *
+from ABM import fsmAgent, periodicActivity, world, agentBase
 
 class fsmTest(fsmAgent):
     
     def __init__(self, theWorld):
         self.transitionEvents=[]
-        fsmAgent.__init__(self, theWorld, "flip")
+        super().__init__(theWorld, "flip")
         
     def activity_flip(self):
         self.scheduleTransition("flop", self.wallClock()+30)
@@ -23,7 +23,7 @@ class periodicTest(periodicActivity):
     def __init__(self, theWorld, period):
         
         self.activityEvents=[]
-        periodicActivity.__init__(self, theWorld, period)
+        super().__init__(theWorld, period)
 
     def activity(self):
         self.activityEvents.append(self.wallClock())
