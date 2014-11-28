@@ -4,10 +4,176 @@ Created on 2/09/2014
 @author: achim
 '''
 import tables
+import resource #@UnresolvedImport
+import os
+import sys
+import time
+import threading
+from multiprocessing import Process, Pipe # @UnresolvedImport
+
 import types
 import numpy
 
 from ABM import fsmAgent
+
+class progressMonitor(threading.Thread):
+    
+    # the schedule contains tuples (a,b)
+    # meaning: till a seconds log in an interval of b seconds
+    
+    schedule=[(200,100), (20,10), (2,1), (0.2, 0.1)]
+    minInterval=0.05
+
+    def __init__(self, theWorld, logOutput):
+        self.theWorld=theWorld
+        self.logAction=logOutput
+        self.quitFlag=threading.Event()
+        self.quitFlag.clear()
+        threading.Thread.__init__(self)
+
+    def run(self):
+        self.startTime=time.time()
+        
+        while not self.quitFlag.is_set():
+            try:
+                self.logAction(self.theWorld)
+            except Exception as e:
+                print("Error in progress logging: {}".format(e), file=sys.stderr)
+                self.quitFlag.set()
+                return
+            # determine next tick
+            theRunTime=time.time()-self.startTime
+            timeInterval=0
+            for runTime, timeInterval in self.schedule:
+                if theRunTime>runTime:
+                    break
+            self.quitFlag.wait(max(timeInterval, self.minInterval))
+
+        try:
+            self.logAction(self.theWorld)
+        except Exception:
+            self.quitFlag.set()
+
+class offloadedHdfLogger:
+    
+    class parameterTableFormat(tables.IsDescription):
+        # inherits the limits of the ABMsimulations.parameters table
+        varName=tables.StringCol(64) #@UndefinedVariable
+        varType=tables.EnumCol(tables.Enum(["INT", "FLOAT", "BOOL", "STR", "RUN"]), "STR", "uint8") #@UndefinedVariable
+        varValue=tables.StringCol(128) #@UndefinedVariable
+    
+    class hdfProgressTable(tables.IsDescription):
+        timeStep = tables.Float64Col(pos=1) # @UndefinedVariable
+        machineTime = tables.Float64Col(pos=2) # @UndefinedVariable
+        agentNo = tables.Int64Col(pos=3) # @UndefinedVariable
+        eventNo = tables.Int64Col(pos=4) # @UndefinedVariable
+        memSize = tables.Int64Col(pos=5) # @UndefinedVariable
+    
+    @staticmethod
+    def offloadedProcess(logFileName, messagepipe):
+        theFile=tables.open_file(logFileName, "w") #, driver="H5FD_CORE")
+
+        # do a loop!        
+        while True:
+            try:
+                msg=messagepipe.recv()
+            except EOFError:
+                break
+            if msg[0]=="parameters":
+                # expect two dictionaries
+                parameters, runParameters=msg[1], msg[2]
+                if "/parameters" in theFile:
+                    parameterTable=theFile.root.parameters
+                else:
+                    parameterTable=theFile.create_table("/", "parameters", offloadedHdfLogger.parameterTableFormat)
+                parameterRow=parameterTable.row
+                
+                varTypeEnum=parameterTable.coldescrs["varType"].enum
+                varTypeDict={int:   varTypeEnum["INT"],
+                             str:   varTypeEnum["STR"],
+                             float: varTypeEnum["FLOAT"],
+                             bool:  varTypeEnum["BOOL"]}
+                runType=varTypeEnum["RUN"]
+                
+                for k,v in parameters.items():
+                    varType=varTypeDict[type(v)]
+                    parameterRow["varName"]=str(k)
+                    parameterRow["varType"]=varType
+                    parameterRow["varValue"]=str(v)
+                    parameterRow.append()
+                    
+                for k,v in runParameters.items():
+                    parameterRow["varName"]=str(k)
+                    parameterRow["varType"]=runType
+                    parameterRow["varValue"]=str(v)
+                    parameterRow.append()
+                
+                del parameterRow
+                parameterTable.close()
+
+            # need a table def
+            # and a transition log
+            elif msg[0]=="registerTransitionType":
+                pass
+            elif msg[0]=="logTransition":
+                pass
+            
+            # also a progress table
+            elif msg[0]=="progress":
+                # if not there, create new table
+                if "/progress" not in theFile:
+                    theFile.create_table('/', 'progress', offloadedHdfLogger.hdfProgressTable)
+                # add values as they are...
+                theFile.root.progress.append([msg[1]])   
+            elif msg[0]=="end":
+                break
+            
+            else:
+                print("unknown type {}".format(msg[0]))
+
+        # done
+                
+        # and end
+        theFile.close()
+        
+    def __init__(self, filename):
+        
+        self.msgPipe, self.recvPipe= Pipe()
+        self.loggingProcess=Process(target=self.offloadedProcess, args=(filename, self.recvPipe))
+        self.loggingProcess.start()
+        
+    def __del__(self):
+        if hasattr(self, "msgPipe"):
+            self.msgPipe.send(["end"])
+            self.recvPipe.close()
+            self.msgPipe.close()
+        if hasattr(self, "loggingProcess"):
+            self.loggingProcess.join()
+
+    def reportTransition(self, agent, s1, s2, t1, t2):
+        pass
+    
+    def logMessage(self, message):
+        pass
+        
+    def writeParameters(self, parameters, runParameters={}):
+        self.msgPipe.send(["parameters", parameters, runParameters])
+       
+    def logProgress(self, theWorld=None):
+        if not hasattr(self, "startTime"):
+            self.startTime=time.time()
+                    
+        stats=open("/proc/{:d}/statm".format(os.getpid())).read().split(" ")
+        memSize=int(stats[5])*resource.getpagesize()
+        if theWorld is not None:
+            theData=(float(theWorld.wallClock),
+                     time.time()-self.startTime,
+                     sum([len(a) for a in theWorld.theAgents.values()]),
+                     len(theWorld.theScheduler.schedule_heap),
+                     memSize)
+        else:
+            theData=(0.0, time.time()-self.startTime, 0, 0, memSize)
+        self.msgPipe.send(["progress", theData])
 
 class hdfLogger:
 
