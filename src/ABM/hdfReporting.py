@@ -4,13 +4,12 @@ Created on 2/09/2014
 @author: achim
 '''
 import tables
-import resource #@UnresolvedImport
+import resource
 import os
 import sys
 import time
 import threading
-from multiprocessing import Process, Pipe # @UnresolvedImport
-
+from multiprocessing import Process, Pipe, Queue, JoinableQueue
 import types
 import numpy
 
@@ -73,6 +72,12 @@ class offloadedHdfLogger:
     def offloadedProcess(logFileName, messagepipe):
         theFile=tables.open_file(logFileName, "w") #, driver="H5FD_CORE")
         theFile.create_group("/", "transitionLogs")
+        theLog=theFile.create_earray(where=theFile.root,
+                                     name="log",
+                                     atom=tables.StringAtom(itemsize=120),
+                                     shape=(0,),
+                                     title="log messages",
+                                     filters=tables.Filters(complevel=9, complib='zlib'))
 
         speciesTables={}
 
@@ -80,6 +85,7 @@ class offloadedHdfLogger:
         while True:
             try:
                 msg=messagepipe.recv()
+                #msg=messagequeue.get()
             except EOFError:
                 break
             if msg[0]=="parameters":
@@ -155,13 +161,19 @@ class offloadedHdfLogger:
                 if "/progress" not in theFile:
                     theFile.create_table('/', 'progress', offloadedHdfLogger.hdfProgressTable)
                 # add values as they are...
-                theFile.root.progress.append([msg[1]])   
+                theFile.root.progress.append([msg[1]])
+                
+            elif msg[0]=="message":
+                theLog.append(numpy.array([str(msg[1])], dtype="S120"))
+
             elif msg[0]=="end":
                 break
             
             else:
                 print("unknown type {}".format(msg[0]))
 
+        #messagequeue.close()
+        messagepipe.close()
         # done
         del speciesTables
         # and end
@@ -171,6 +183,9 @@ class offloadedHdfLogger:
         self.speciesTables={}
         self.msgPipe, self.recvPipe= Pipe()
         self.loggingProcess=Process(target=self.offloadedProcess, args=(filename, self.recvPipe))
+        # queue is even slower!
+        #self.msgQueue=JoinableQueue()
+        #self.loggingProcess=Process(target=self.offloadedProcess, args=(filename, self.msgQueue))
         self.loggingProcess.start()
         
     def __del__(self):
@@ -178,6 +193,11 @@ class offloadedHdfLogger:
             self.msgPipe.send(["end"])
             self.recvPipe.close()
             self.msgPipe.close()
+            del self.msgPipe, self.recvPipe
+        if hasattr(self, "msgQueue"):
+            self.msgQueue.put(["end"])
+            self.msgQueue.close()
+            del self.msgQueue
         if hasattr(self, "loggingProcess"):
             self.loggingProcess.join()
 
@@ -211,6 +231,7 @@ class offloadedHdfLogger:
         # how to get the extra parameters?
         
         self.msgPipe.send(["registerTransitionType", str(agentType.__name__), tableDef])
+        #self.msgQueue.put_nowait(["registerTransitionType", str(agentType.__name__), tableDef])
         self.speciesTables[agentType]=tableDef
 
     def reportTransition(self, agent, s1, s2, t1, t2, **extraParams):
@@ -226,14 +247,16 @@ class offloadedHdfLogger:
         
         # that's the order expected for msg[2]: agentId, t1, t2, fromState, toState, effort
         self.msgPipe.send(["logTransition", str(agentType.__name__), [agent.agentId, t1, t2, s1, s2, agent.effort], extraParams])
-
+        #self.msgQueue.put_nowait(["logTransition", str(agentType.__name__), [agent.agentId, t1, t2, s1, s2, agent.effort], extraParams])
+        
     def logMessage(self, message):
-        print("logMessage not implemented")
-        pass
+        self.msgPipe.send(["message", message])
+        #self.msgQueue.put_nowait(["message", message])
         
     def writeParameters(self, parameters, runParameters={}):
         self.msgPipe.send(["parameters", parameters, runParameters])
-       
+        #self.msgQueue.put_nowait(["parameters", parameters, runParameters])
+                                
     def logProgress(self, theWorld=None):
         if not hasattr(self, "startTime"):
             self.startTime=time.time()
@@ -249,8 +272,10 @@ class offloadedHdfLogger:
         else:
             theData=(0.0, time.time()-self.startTime, 0, 0, memSize)
         self.msgPipe.send(["progress", theData])
+        #self.msgQueue.put_nowait(["progress", theData])
 
 class hdfLogger:
+    # no offloading here
 
     class parameterTableFormat(tables.IsDescription):
         # inherits the limits of the ABMsimulations.parameters table

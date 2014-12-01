@@ -10,27 +10,7 @@ import time
 import tables
 
 from ABM import fsmAgent, world, hdfReporting
-from ABM.hdfReporting import offloadedHdfLogger
-
-class flipFlopAgent(fsmAgent):
-    
-    logger=None
-    
-    def __init__(self, theWorld):
-        self.transitionEvents=[]
-        super().__init__(theWorld, "flip")
-        
-    def activity_flip(self):
-        self.scheduleTransition("flop", self.wallClock()+30)
-        
-    def activity_flop(self):
-        self.scheduleTransition("flip", self.wallClock()+30)
-
-    def reportTransition(self, s1, s2, t1, t2):
-        self.transitionEvents.append((t2, s2))
-        if self.myWorld.theLogger is not None:
-            #self.myWorld.theLogger.reportTransition(self, s1, s2, t1, t2)
-            self.myWorld.theLogger.reportTransition(self, s1, s2, t1, t2, blabla="b")
+from ABM.hdfReporting import offloadedHdfLogger, hdfLogger
 
 class TestPrameters(unittest.TestCase):
     
@@ -78,6 +58,46 @@ class TestPrameters(unittest.TestCase):
         self.assertTrue(len(parameterTable)==len(parameterSet)*repeatNo)        
         logFile.close()
 
+class testProgressReporting(unittest.TestCase):
+
+    fileName="test.hdf"
+    
+    def setUp(self):
+        if os.path.isfile(self.fileName):
+            os.unlink(self.fileName)
+
+    def testProgressReporting(self):
+        
+        reportCalls=[]
+        
+        r=hdfReporting.progressMonitor(None, lambda x:reportCalls.append(x))
+        
+        r.start()
+        self.assertTrue(r.isAlive())
+        r.join(1.0) # must be 1.0, otherwise won't be >=10 calls 
+        self.assertTrue(r.isAlive())
+        r.quitFlag.set()
+        r.join()
+        self.assertFalse(r.isAlive())
+        
+        self.assertGreaterEqual(len(reportCalls), 10)
+
+    def testProgressReportingSafeQuit(self):
+        
+        reportCalls=[0]*5
+        
+        r=hdfReporting.progressMonitor(None, lambda x:reportCalls.pop())
+        
+        r.start()
+        self.assertTrue(r.isAlive())
+        print("expecting error message:\n====")
+        r.join(1.0)
+        time.sleep(0.05)
+        sys.stderr.flush()
+        print("====")
+        self.assertFalse(r.isAlive())
+        self.assertTrue(r.quitFlag.isSet(), "expect quit flag set due to error")
+
     def testProgress(self):
         progressIter=10
         o=offloadedHdfLogger(self.fileName)
@@ -91,13 +111,68 @@ class TestPrameters(unittest.TestCase):
         self.assertTrue(len(progressTable)==progressIter)
         logFile.close()
 
+class testMessageLogging(unittest.TestCase):
+
+    fileName="test.hdf"
+    
+    def setUp(self):
+        if os.path.isfile(self.fileName):
+            os.unlink(self.fileName)
+
+    def testSimpleMessageLogging(self):    
+        progressIter=10
+        o=offloadedHdfLogger(self.fileName)
+        for i in range(progressIter):
+            o.logMessage("message {:d}".format(i))
+        del o
+        self.assertTrue(tables.isPyTablesFile(self.fileName), "expecting hdf file {:s}".format(self.fileName))
+        logFile=tables.openFile(self.fileName)
+        self.assertTrue("/log" in logFile, "expecting message log table")
+        logTable=logFile.root.log.read()
+        self.assertTrue(len(logTable)==progressIter)
+        logFile.close()
+
+class flipFlopAgent(fsmAgent):
+    
+    def __init__(self, theWorld):
+        self.transitionEvents=[]
+        super().__init__(theWorld, "flip")
+        
+    def activity_flip(self):
+        self.scheduleTransition("flop", self.wallClock()+30)
+        
+    def activity_flop(self):
+        self.scheduleTransition("flip", self.wallClock()+30)
+
+    def reportTransition(self, s1, s2, t1, t2):
+        if self.myWorld.theLogger is not None:
+            self.myWorld.theLogger.reportTransition(self, s1, s2, t1, t2)
+        else:
+            self.transitionEvents.append((t2, s2))
+
+class flipFlopAgentWCustomizedLogging(fsmAgent):
+        
+    def __init__(self, theWorld):
+        super().__init__(theWorld, "flip")
+        
+    def activity_flip(self):
+        self.scheduleTransition("flop", self.wallClock()+30)
+        
+    def activity_flop(self):
+        self.scheduleTransition("flip", self.wallClock()+30)
+
+    def reportTransition(self, s1, s2, t1, t2):
+        if self.myWorld.theLogger is not None:
+            #self.myWorld.theLogger.reportTransition(self, s1, s2, t1, t2)
+            self.myWorld.theLogger.reportTransition(self, s1, s2, t1, t2, blabla=s1)
+
 class TestFull(unittest.TestCase):
 
     fileName="test.hdf"
 
     def setUp(self):
         self.agentWorld=world()
-        a=flipFlopAgent(self.agentWorld)
+        flipFlopAgent(self.agentWorld)
         if os.path.isfile(self.fileName):
             os.unlink(self.fileName)
 
@@ -105,10 +180,11 @@ class TestFull(unittest.TestCase):
         del self.agentWorld
 
     def testReporting(self):
+        flipFlopAgentWCustomizedLogging(self.agentWorld)
         # add reporting
         o=self.agentWorld.theLogger=offloadedHdfLogger(self.fileName)
         # log start
-        o.registerTransitionTable(self.agentWorld.theAgents[flipFlopAgent][0], {"blabla": "tables.StringCol(itemsize=15)"}) # @UndefinedVariable
+        o.registerTransitionTable(self.agentWorld.theAgents[flipFlopAgentWCustomizedLogging][0], {"blabla": "tables.StringCol(itemsize=15)"})
 
         schedulerIter=10
         # start scheduler
@@ -123,42 +199,80 @@ class TestFull(unittest.TestCase):
 
         logFile=tables.openFile(self.fileName, "r")
         self.assertTrue("/transitionLogs/flipFlopAgent" in logFile, "expecting transition table")
+        # test the table structure
+        self.assertSetEqual(set(logFile.root.transitionLogs.flipFlopAgent.colnames),
+                            set(["agentId", "timeStamp", "fromState", "toState", "effort", "dwellTime"]))
+        
+        self.assertTrue("/transitionLogs/flipFlopAgentWCustomizedLogging" in logFile, "expecting transition table")
+
+        # test the table structure
+        self.assertSetEqual(set(logFile.root.transitionLogs.flipFlopAgentWCustomizedLogging.colnames),
+                            set(["agentId", "timeStamp", "fromState", "toState", "effort", "dwellTime", "blabla"]))
+        logFile.close()
+
+    def testReportingAndLogging(self):
+        # add reporting
+        o=self.agentWorld.theLogger=offloadedHdfLogger(self.fileName)
+        # log start
+
+        r=hdfReporting.progressMonitor(self.agentWorld, o.logProgress)
+        
+        r.start()
+        schedulerIter=10
+        # start scheduler
+        for i in range(schedulerIter):
+            self.agentWorld.theScheduler.eventLoop(10.0*(i+1))
+
+        r.quitFlag.set()        
+        r.join()
+        self.agentWorld.theLogger=None
+        del r
+        del o
+
+        # find out whether report is there
+        self.assertTrue(tables.isPyTablesFile(self.fileName), "expecting hdf file {:s}".format(self.fileName))
+
+        logFile=tables.openFile(self.fileName, "r")
+        self.assertTrue("/transitionLogs/flipFlopAgent" in logFile, "expecting transition table")
 
         # test the table structure
         self.assertSetEqual(set(logFile.root.transitionLogs.flipFlopAgent.colnames),
-                            set(["agentId", "timeStamp", "fromState", "toState", "effort", "dwellTime", "blabla"]))
-        
+                            set(["agentId", "timeStamp", "fromState", "toState", "effort", "dwellTime"]))
+
+        self.assertTrue("/progress" in logFile, "expecting progress log table")
+
         logFile.close()
 
-    def testProgressReporting(self):
-        
-        reportCalls=[]
-        
-        r=hdfReporting.progressMonitor(None, lambda x:reportCalls.append(x))
-        
+class testBenchmark(unittest.TestCase):
+    
+    def testSpeed(self):
+        fileNameOffload="test1.hdf"
+        if os.path.isfile(fileNameOffload):
+            os.unlink(fileNameOffload)
+        fileName="test2.hdf"
+        if os.path.isfile(fileName):
+            os.unlink(fileName)
+
+        simTime=1000000
+
+        self.agentWorld=world()
+        flipFlopAgent(self.agentWorld)
+        self.agentWorld.theLogger=offloadedHdfLogger(fileNameOffload)
+        r=hdfReporting.progressMonitor(self.agentWorld, self.agentWorld.theLogger.logProgress)
         r.start()
-        r.join(1.0)
+        t=time.time()
+        self.agentWorld.theScheduler.eventLoop(simTime)
         r.quitFlag.set()
         r.join()
-        
-        self.assertGreaterEqual(len(reportCalls), 10)
+        del r
+        self.agentWorld.theLogger=None
+        print("offLoad", time.time()-t)
 
-    @unittest.skip
-    def testProgressReportingSafeQuit(self):
-        
-        reportCalls=[0]*5
-        
-        r=hdfReporting.progressMonitor(None, lambda x:reportCalls.pop())
-        
-        r.start()
-        self.assertTrue(r.isAlive())
-        print("expecting error message:\n====")
-        r.join(1.0)
-        print("====")
-        sys.stdout.flush()
-        self.assertFalse(r.isAlive())
-        self.assertTrue(r.quitFlag.isSet(), "expect quit flag set due to error")
-        
-if __name__ == "__main__":
-    #import sys;sys.argv = ['', 'Test.testName']
-    unittest.main()
+        # old hdf thingy
+        self.agentWorld=world()
+        flipFlopAgent(self.agentWorld)
+        self.agentWorld.theLogger=hdfLogger(fileName)
+        t=time.time()
+        self.agentWorld.theScheduler.eventLoop(simTime)
+        self.agentWorld.theLogger=None
+        print("same process", time.time()-t)
