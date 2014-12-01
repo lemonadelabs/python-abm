@@ -181,7 +181,7 @@ class offloadedHdfLogger:
         
     def __init__(self, filename):
         self.speciesTables={}
-        self.msgPipe, self.recvPipe= Pipe()
+        self.recvPipe, self.msgPipe = Pipe(duplex=False)
         self.loggingProcess=Process(target=self.offloadedProcess, args=(filename, self.recvPipe))
         # queue is even slower!
         #self.msgQueue=JoinableQueue()
@@ -261,7 +261,9 @@ class offloadedHdfLogger:
         if not hasattr(self, "startTime"):
             self.startTime=time.time()
                     
-        stats=open("/proc/{:d}/statm".format(os.getpid())).read().split(" ")
+        statsFile=open("/proc/{:d}/statm".format(os.getpid()))
+        stats=statsFile.read().split(" ")
+        statsFile.close()
         memSize=int(stats[5])*resource.getpagesize()
         if theWorld is not None:
             theData=(float(theWorld.wallClock),

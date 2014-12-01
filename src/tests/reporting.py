@@ -32,7 +32,7 @@ class TestPrameters(unittest.TestCase):
         del o
         self.assertTrue(tables.isPyTablesFile(self.fileName), "expecting hdf file {:s}".format(self.fileName))
 
-        logFile=tables.openFile(self.fileName)
+        logFile=tables.open_file(self.fileName)
         self.assertTrue("/parameters" in logFile)
         
         parameterTable=logFile.root.parameters.read()
@@ -51,7 +51,7 @@ class TestPrameters(unittest.TestCase):
         del o
         self.assertTrue(tables.isPyTablesFile(self.fileName), "expecting hdf file {:s}".format(self.fileName))
 
-        logFile=tables.openFile(self.fileName)
+        logFile=tables.open_file(self.fileName)
         self.assertTrue("/parameters" in logFile)
         
         parameterTable=logFile.root.parameters.read()
@@ -105,7 +105,7 @@ class testProgressReporting(unittest.TestCase):
             o.logProgress()
         del o
         self.assertTrue(tables.isPyTablesFile(self.fileName), "expecting hdf file {:s}".format(self.fileName))
-        logFile=tables.openFile(self.fileName)
+        logFile=tables.open_file(self.fileName, 'r')
         self.assertTrue("/progress" in logFile, "expecting progress log table")
         progressTable=logFile.root.progress.read()
         self.assertTrue(len(progressTable)==progressIter)
@@ -126,7 +126,7 @@ class testMessageLogging(unittest.TestCase):
             o.logMessage("message {:d}".format(i))
         del o
         self.assertTrue(tables.isPyTablesFile(self.fileName), "expecting hdf file {:s}".format(self.fileName))
-        logFile=tables.openFile(self.fileName)
+        logFile=tables.open_file(self.fileName, 'r')
         self.assertTrue("/log" in logFile, "expecting message log table")
         logTable=logFile.root.log.read()
         self.assertTrue(len(logTable)==progressIter)
@@ -197,7 +197,7 @@ class TestFull(unittest.TestCase):
         # find out whether report is there
         self.assertTrue(tables.isPyTablesFile(self.fileName), "expecting hdf file {:s}".format(self.fileName))
 
-        logFile=tables.openFile(self.fileName, "r")
+        logFile=tables.open_file(self.fileName, "r")
         self.assertTrue("/transitionLogs/flipFlopAgent" in logFile, "expecting transition table")
         # test the table structure
         self.assertSetEqual(set(logFile.root.transitionLogs.flipFlopAgent.colnames),
@@ -223,7 +223,7 @@ class TestFull(unittest.TestCase):
         for i in range(schedulerIter):
             self.agentWorld.theScheduler.eventLoop(10.0*(i+1))
 
-        r.quitFlag.set()        
+        r.quitFlag.set()
         r.join()
         self.agentWorld.theLogger=None
         del r
@@ -232,7 +232,7 @@ class TestFull(unittest.TestCase):
         # find out whether report is there
         self.assertTrue(tables.isPyTablesFile(self.fileName), "expecting hdf file {:s}".format(self.fileName))
 
-        logFile=tables.openFile(self.fileName, "r")
+        logFile=tables.open_file(self.fileName, "r")
         self.assertTrue("/transitionLogs/flipFlopAgent" in logFile, "expecting transition table")
 
         # test the table structure
@@ -254,19 +254,25 @@ class testBenchmark(unittest.TestCase):
             os.unlink(fileName)
 
         simTime=1000000
+        import cProfile
+        pr=cProfile.Profile()
 
         self.agentWorld=world()
         flipFlopAgent(self.agentWorld)
         self.agentWorld.theLogger=offloadedHdfLogger(fileNameOffload)
-        r=hdfReporting.progressMonitor(self.agentWorld, self.agentWorld.theLogger.logProgress)
-        r.start()
+        #r=hdfReporting.progressMonitor(self.agentWorld, self.agentWorld.theLogger.logProgress)
+        #r.start()
         t=time.time()
+        pr.enable()
         self.agentWorld.theScheduler.eventLoop(simTime)
-        r.quitFlag.set()
-        r.join()
-        del r
+        pr.disable()
+        #r.quitFlag.set()
+        #r.join()
+        #del r
         self.agentWorld.theLogger=None
         print("offLoad", time.time()-t)
+        pr.dump_stats('offLoad.profile')
+        del pr
 
         # old hdf thingy
         self.agentWorld=world()
