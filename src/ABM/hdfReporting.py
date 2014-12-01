@@ -72,6 +72,9 @@ class offloadedHdfLogger:
     @staticmethod
     def offloadedProcess(logFileName, messagepipe):
         theFile=tables.open_file(logFileName, "w") #, driver="H5FD_CORE")
+        theFile.create_group("/", "transitionLogs")
+
+        speciesTables={}
 
         # do a loop!        
         while True:
@@ -114,9 +117,37 @@ class offloadedHdfLogger:
             # need a table def
             # and a transition log
             elif msg[0]=="registerTransitionType":
-                pass
+                # change lists to enumerations!
+                theColumns={}
+                for name, col in msg[2].items():
+                    if type(col) in [list,tuple]:
+                        col=tables.EnumCol(tables.Enum(col), "start", "uint16") # @UndefinedVariable
+                    elif type(col) is str:
+                        col=eval(col) # ToDo: remove eval
+                    theColumns[name]=col
+                        
+                # gets species name and table format as dict
+                transitions=type("transitions", (tables.IsDescription,), theColumns) 
+                theTable=theFile.create_table("/transitionLogs", msg[1], transitions)
+                speciesTables[msg[1]]=theTable
+
             elif msg[0]=="logTransition":
-                pass
+                # gets species name and values in order as defined by the table format
+                # todo: check the format!
+                table=speciesTables[msg[1]]
+                row=table.row
+                agentId, t1, t2, fromState, toState, effort=msg[2]
+                row["agentId"]=agentId
+                row["timeStamp"]=t2
+                row["fromState"]=table.coldescrs["fromState"].enum[fromState if fromState else "start"]
+                row["toState"]=table.coldescrs["toState"].enum[toState if toState else "start"]
+                row["dwellTime"]=t2-t1
+                row["effort"]=effort
+
+                if len(msg)>2:
+                    for name, value in msg[3].items():
+                        row[name]=value                
+                row.append()
             
             # also a progress table
             elif msg[0]=="progress":
@@ -132,12 +163,12 @@ class offloadedHdfLogger:
                 print("unknown type {}".format(msg[0]))
 
         # done
-                
+        del speciesTables
         # and end
         theFile.close()
         
     def __init__(self, filename):
-        
+        self.speciesTables={}
         self.msgPipe, self.recvPipe= Pipe()
         self.loggingProcess=Process(target=self.offloadedProcess, args=(filename, self.recvPipe))
         self.loggingProcess.start()
@@ -150,10 +181,54 @@ class offloadedHdfLogger:
         if hasattr(self, "loggingProcess"):
             self.loggingProcess.join()
 
-    def reportTransition(self, agent, s1, s2, t1, t2):
-        pass
-    
+    def registerTransitionTable(self, agent, extraParameterTypes={}):
+        # see whether this is already registered
+        if not isinstance(agent, fsmAgent):
+            raise TypeError("{:s} is not an fsmAgent".format(str(agent)))
+        
+        agentType=type(agent)
+        # initialize the enum list
+        stateNames=set(["start", "end"]) # default, must be there
+        for attr in dir(agent):
+            nameSplit=attr.split("_")
+            if len(nameSplit)>=2 and nameSplit[0] in ["enter", "leave", "activity"]:
+                attr_object=getattr(agent, attr)
+                attr_name="_".join(nameSplit[1:])
+                if type(attr_object) is types.MethodType:
+                    stateNames.add(attr_name)
+
+        stateNames=list(stateNames)
+        stateNames.sort()
+        tableDef={ "timeStamp": tables.Float64Col(), # @UndefinedVariable
+                  "fromState": stateNames,
+                  "toState": stateNames,
+                  "dwellTime":tables.Float32Col(), # @UndefinedVariable
+                  "effort": tables.Float32Col(),   # @UndefinedVariable
+                  "agentId": tables.UInt64Col()}  # @UndefinedVariable
+        
+        tableDef.update(extraParameterTypes)
+        # and then handle the extra parameters!
+        # how to get the extra parameters?
+        
+        self.msgPipe.send(["registerTransitionType", str(agentType.__name__), tableDef])
+        self.speciesTables[agentType]=tableDef
+
+    def reportTransition(self, agent, s1, s2, t1, t2, **extraParams):
+
+        # see whether this is already registered
+        if not isinstance(agent, fsmAgent):
+            raise TypeError("{:s} is not an fsmAgent".format(str(agent)))
+
+        agentType=type(agent)
+        if agentType not in self.speciesTables:
+            # create agent table on the fly
+            self.registerTransitionTable(agent)
+        
+        # that's the order expected for msg[2]: agentId, t1, t2, fromState, toState, effort
+        self.msgPipe.send(["logTransition", str(agentType.__name__), [agent.agentId, t1, t2, s1, s2, agent.effort], extraParams])
+
     def logMessage(self, message):
+        print("logMessage not implemented")
         pass
         
     def writeParameters(self, parameters, runParameters={}):

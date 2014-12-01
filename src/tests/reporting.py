@@ -5,13 +5,16 @@ Created on 28/11/2014
 '''
 import unittest
 import os
-import subprocess
+import sys
+import time
 import tables
 
 from ABM import fsmAgent, world, hdfReporting
 from ABM.hdfReporting import offloadedHdfLogger
 
 class flipFlopAgent(fsmAgent):
+    
+    logger=None
     
     def __init__(self, theWorld):
         self.transitionEvents=[]
@@ -25,7 +28,9 @@ class flipFlopAgent(fsmAgent):
 
     def reportTransition(self, s1, s2, t1, t2):
         self.transitionEvents.append((t2, s2))
-        #fsmAgent.reportTransition(self, s1, s2, t1, t2)
+        if self.myWorld.theLogger is not None:
+            #self.myWorld.theLogger.reportTransition(self, s1, s2, t1, t2)
+            self.myWorld.theLogger.reportTransition(self, s1, s2, t1, t2, blabla="b")
 
 class TestPrameters(unittest.TestCase):
     
@@ -101,31 +106,31 @@ class TestFull(unittest.TestCase):
 
     def testReporting(self):
         # add reporting
-        o=offloadedHdfLogger(self.fileName)
-
+        o=self.agentWorld.theLogger=offloadedHdfLogger(self.fileName)
         # log start
-        o.logProgress(self.agentWorld)
+        o.registerTransitionTable(self.agentWorld.theAgents[flipFlopAgent][0], {"blabla": "tables.StringCol(itemsize=15)"}) # @UndefinedVariable
 
         schedulerIter=10
         # start scheduler
         for i in range(schedulerIter):
             self.agentWorld.theScheduler.eventLoop(10.0*(i+1))
-            o.logProgress(self.agentWorld)
         
-        # quit reporter
+        self.agentWorld.theLogger=None
         del o
         
         # find out whether report is there
         self.assertTrue(tables.isPyTablesFile(self.fileName), "expecting hdf file {:s}".format(self.fileName))
-        logFile=tables.openFile(self.fileName)
-        self.assertTrue("/progress" in logFile, "expecting progress log table")
 
-        # read report
-        progressTable=logFile.root.progress.read()
-        self.assertTrue(len(progressTable)==(schedulerIter+1))
+        logFile=tables.openFile(self.fileName, "r")
+        self.assertTrue("/transitionLogs/flipFlopAgent" in logFile, "expecting transition table")
+
+        # test the table structure
+        self.assertSetEqual(set(logFile.root.transitionLogs.flipFlopAgent.colnames),
+                            set(["agentId", "timeStamp", "fromState", "toState", "effort", "dwellTime", "blabla"]))
+        
         logFile.close()
 
-    def testPeriodicReporting(self):
+    def testProgressReporting(self):
         
         reportCalls=[]
         
@@ -138,7 +143,8 @@ class TestFull(unittest.TestCase):
         
         self.assertGreaterEqual(len(reportCalls), 10)
 
-    def testPeriodicReportingSafeQuit(self):
+    @unittest.skip
+    def testProgressReportingSafeQuit(self):
         
         reportCalls=[0]*5
         
@@ -149,6 +155,7 @@ class TestFull(unittest.TestCase):
         print("expecting error message:\n====")
         r.join(1.0)
         print("====")
+        sys.stdout.flush()
         self.assertFalse(r.isAlive())
         self.assertTrue(r.quitFlag.isSet(), "expect quit flag set due to error")
         
