@@ -8,6 +8,28 @@ import unittest
 from ABM import scenario
 import datetime
 
+class fromCmdLine(unittest.TestCase):
+    
+    def testSimple(self):
+        s=scenario()
+        s.readFromCmdLine(("--param=a,int,1", "--param=b,float,2.3", "--param=c,bool,1"))
+        self.assertDictEqual(s.parameters, {"a": [(None,),(1,)], "b":[(None,), (2.3,)], "c": [(None,), (True,)]})
+
+    def testWithDate(self):
+        s=scenario()
+        s.readFromCmdLine(("--param=a,int,1", "--param=a,20130101,2", "--param=a,20130102,3"))
+        self.assertDictEqual(s.parameters,
+                             {"a": [(None, datetime.datetime(2013,1,1), datetime.datetime(2013,1,2)),
+                                    (1,2,3)]})
+
+        self.assertEqual(s.getValue("a", datetime.datetime(2012,1,1)), 1)
+        self.assertEqual(s.getValue("a", datetime.datetime(2013,1,1)), 2)
+        self.assertEqual(s.getValue("a", datetime.datetime(2013,1,1, 0, 30)), 2)
+        self.assertEqual(s.getValue("a", datetime.datetime(2013,1,2)),3)
+        self.assertEqual(s.getValue("a", datetime.datetime(2014,1,1)), 3)
+                
+
+
 class loadJSON(unittest.TestCase):
     
     def testEmpty(self):
@@ -25,8 +47,7 @@ class loadJSON(unittest.TestCase):
         s.readFromJSON("""{"a":1, "b":1.0, "c":true }""")
         
         self.assertDictEqual(s.parameters, {"a": [(None,),(1,)], "b": [(None,), (1.0,)], "c": [(None,), (True,)]})
-        
-        
+
     def testTimeFormats(self):
         s=scenario()
         
