@@ -85,17 +85,19 @@ class scenario:
             # success
             self.parameters=newParameters
         
-    def writeToMySQL(self, connection, experimentID=None):
+    def writeToMySQL(self, session, experimentID):
 
-        c=connection.cursor()
-        # clean up db entries
+        expID=experimentID.hex
+        # todo: clear values before writing new ones
+        session.query(SQLscenario).filter(SQLscenario.experimentID==expID).delete()
         
-        # assemble execute_many parameters
-        "INSERT INTO `parameters` "
-        
-        
-        c.close()
-        del c
+        for name, values in self.parameters.items():
+            theType={int: "int", float:"float", bool:"bool"}[type(values[1][0])]
+            session.add_all([SQLscenario(name=name, type_=theType,
+                                         experimentID=expID,
+                                         date=d,
+                                         value=str(v)) for d,v in zip(*values)])
+        session.commit()
         
         
     def readFromJSON(self, jsonString):

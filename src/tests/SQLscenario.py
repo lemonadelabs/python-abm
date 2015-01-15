@@ -13,7 +13,6 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker 
 from sqlalchemy.engine.url import URL
 
-
 class fromSQL(unittest.TestCase):
 
     def setUp(self):
@@ -28,17 +27,13 @@ class fromSQL(unittest.TestCase):
         self.sessionmaker=sessionmaker(bind=engine)
 
         s=self.sessionmaker()
-        allEntries=s.query(SQLscenario).filter(SQLscenario.experimentID==self.theUUID.hex).all()
-        for e in allEntries:
-            s.delete(e)
+        s.query(SQLscenario).filter(SQLscenario.experimentID==self.theUUID.hex).delete()
         s.commit()
         s.close()
         
     def tearDown(self):
         s=self.sessionmaker()
-        allEntries=s.query(SQLscenario).filter(SQLscenario.experimentID==self.theUUID.hex).all()
-        for e in allEntries:
-            s.delete(e)
+        s.query(SQLscenario).filter(SQLscenario.experimentID==self.theUUID.hex).delete()
         s.commit()
         s.close()
         del s
@@ -74,3 +69,11 @@ class fromSQL(unittest.TestCase):
         self.assertIn("bla", s.parameters)
         self.assertIs(type(s.parameters["bla"][1][0]), int)
         self.assertIs(type(s.parameters["bla"][1][1]), int)
+        
+    def testReadWrite(self):
+        session=self.sessionmaker()
+
+        s=scenario()
+        s.parameters["bla"]=([None],[1])
+        s.writeToMySQL(session, self.theUUID)
+        self.assertEqual(session.query(SQLscenario).filter(SQLscenario.experimentID==self.theUUID.hex and SQLscenario.name=="bla").count(),1)
