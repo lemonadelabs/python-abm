@@ -9,12 +9,94 @@ this module provides class and functions to handle parameter sets/scenarios
 import json
 import datetime
 import bisect
-from argparse import ArgumentError
+
+from sqlalchemy import Column, String, DateTime, Integer, Enum
+from sqlalchemy.ext.declarative import declarative_base
+import itertools
+SQLBase=declarative_base()
+
+class SQLscenario(SQLBase):
+    __tablename__="scenario"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    experimentID=Column(String(32))
+    name=Column(String(128))
+    type_=Column(Enum("Int", "Float", "Bool"))
+    date = Column(DateTime(timezone=False), nullable=True)
+    value = Column(String(128))
 
 class scenario:
     
     def __init__(self):
         self.parameters={}
+
+    def readFromMySQL(self, session, experimentID=None):
+        # get a cursor, get a uuid or so...
+        
+        if experimentID is None:
+            # do not filter
+            scenarios=session.query(SQLscenario.name, SQLscenario.date, SQLscenario.type_, SQLscenario.value).all()
+        else:
+            scenarios=session.query(SQLscenario.name, SQLscenario.date, SQLscenario.type_,  SQLscenario.value).filter(SQLscenario.experimentID==experimentID.hex).all()
+
+        newParameters={}
+        for name, date, type_, value in scenarios:
+            
+            if type_.lower()=="float":
+                value=float(value)
+            elif type_.lower()=="int":
+                value=int(value)
+            elif type_.lower()=="bool":
+                value=(value in ["True", "1", "true"])
+            else:
+                raise ValueError("unknown type specification '{}'".format(type_))
+            
+            
+            # oh what about the default parameter?!
+            if date is None:
+                if name in newParameters:
+                    newParameters[name].insert(0,(None, value))
+                else:
+                    newParameters[name]=[(None, value)]
+
+            else:
+                if name in newParameters:
+                    newParameters[name].append((date, value))
+                else:
+                    newParameters[name]=[(date, value),]
+
+        
+        for key in list(newParameters.keys()):
+            theValues=newParameters[key]
+
+            # check whether there is a default value
+            if theValues[0][0] is not None:
+                raise ValueError("need one default value for '{}'".format(key))
+            if len(theValues)>1 and theValues[1][0] is None:
+                raise ValueError("need only one default value for '{}'".format(key))
+
+            # todo: check types of values are consistent!
+            
+            sortedValues=theValues[1:]
+            sortedValues.sort()
+            sortedValues.insert(0, theValues[0])
+            newParameters[key]=list(zip(*sortedValues))
+        
+            # success
+            self.parameters=newParameters
+        
+    def writeToMySQL(self, connection, experimentID=None):
+
+        c=connection.cursor()
+        # clean up db entries
+        
+        # assemble execute_many parameters
+        "INSERT INTO `parameters` "
+        
+        
+        c.close()
+        del c
+        
         
     def readFromJSON(self, jsonString):
         # JSON doesn't distinguish reliably between integers and floats
@@ -88,6 +170,24 @@ class scenario:
             timeDate=timeDate.replace(microsecond=int(float("0"+t[17:])*1e6))
 
         return timeDate
+    
+    def writeToCmdLine(self):
+        args=[]
+        
+        for name, (times, values) in self.parameters.items():
+            for time,value in zip(times,values):
+                if time is None:
+                    valueType={int:"int", float: "float", bool:"bool"}[type(value)]
+                    args.append("--param={:s},{:s},{:s}".format(name, valueType, str(value)))
+                else:
+                    dateStr="{:04d}{:02d}{:02d}".format(time.year, time.month, time.day)
+                    if time.time()!=datetime.time():
+                        dateStr+=" {:02d}:{:02d}:{:02d}".format(time.hour, time.minute, time.second)
+                        if time.microsecond!=0:
+                            dateStr+=".{:06d}".format(int(time.microsecond*1e6))
+                    args.append("--param={:s},{:s},{:s}".format(name, dateStr, str(value)))
+        
+        return args
     
     def readFromCmdLine(self, args):
 #        for k,v in self.experimentParameters.items():
