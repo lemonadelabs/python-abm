@@ -22,7 +22,7 @@ class fromSQL(unittest.TestCase):
                                  password='awe5ome',
                                  database="ABMsimulations"))
         #engine.connect()
-        SQLBase.metadata.create_all(engine)
+        SQLBase.metadata.create_all(engine) #@UndefinedVariable
         
         self.sessionmaker=sessionmaker(bind=engine)
 

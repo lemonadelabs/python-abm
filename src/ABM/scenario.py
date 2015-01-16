@@ -12,10 +12,11 @@ import bisect
 
 from sqlalchemy import Column, String, DateTime, Integer, Enum
 from sqlalchemy.ext.declarative import declarative_base
-import itertools
+
 SQLBase=declarative_base()
 
 class SQLscenario(SQLBase):
+    # todo: this is not a scenario, the collection of rows with the same UUID are a scenario
     __tablename__="scenario"
     
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -51,7 +52,6 @@ class scenario:
             else:
                 raise ValueError("unknown type specification '{}'".format(type_))
             
-            
             # oh what about the default parameter?!
             if date is None:
                 if name in newParameters:
@@ -64,7 +64,6 @@ class scenario:
                     newParameters[name].append((date, value))
                 else:
                     newParameters[name]=[(date, value),]
-
         
         for key in list(newParameters.keys()):
             theValues=newParameters[key]
@@ -98,7 +97,6 @@ class scenario:
                                          date=d,
                                          value=str(v)) for d,v in zip(*values)])
         session.commit()
-        
         
     def readFromJSON(self, jsonString):
         # JSON doesn't distinguish reliably between integers and floats
