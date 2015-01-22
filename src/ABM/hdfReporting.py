@@ -9,7 +9,7 @@ import os
 import sys
 import time
 import threading
-from multiprocessing import Process, Pipe, Queue, JoinableQueue
+from multiprocessing import Process, Pipe, Queue, JoinableQueue # @UnusedImport
 import types
 import numpy
 
@@ -53,140 +53,148 @@ class progressMonitor(threading.Thread):
         except Exception:
             self.quitFlag.set()
 
-def offloadedProcess(logFileName, messagepipe):
-    theFile=tables.open_file(logFileName, "w") #, driver="H5FD_CORE")
-    theFile.create_group("/", "transitionLogs")
-    theLog=theFile.create_earray(where=theFile.root,
-                                 name="log",
-                                 atom=tables.StringAtom(itemsize=120),
-                                 shape=(0,),
-                                 title="log messages",
-                                 filters=tables.Filters(complevel=9, complib='zlib'))
-
-    speciesTables={}
-
-    # do a loop!        
-    while True:
-        try:
-            msg=messagepipe.recv()
-            #msg=messagequeue.get()
-        except EOFError:
-            break
-        if msg[0]=="parameters":
-            # expect two dictionaries
-            parameters, runParameters=msg[1], msg[2]
-            if "/parameters" in theFile:
-                parameterTable=theFile.root.parameters
-            else:
-                parameterTable=theFile.create_table("/", "parameters", offloadedHdfLogger.parameterTableFormat)
-            parameterRow=parameterTable.row
-            
-            varTypeEnum=parameterTable.coldescrs["varType"].enum
-            varTypeDict={int:   varTypeEnum["INT"],
-                         str:   varTypeEnum["STR"],
-                         float: varTypeEnum["FLOAT"],
-                         bool:  varTypeEnum["BOOL"]}
-            runType=varTypeEnum["RUN"]
-            
-            for k,v in parameters.items():
-                varType=varTypeDict[type(v)]
-                parameterRow["varName"]=str(k)
-                parameterRow["varType"]=varType
-                parameterRow["varValue"]=str(v)
-                parameterRow.append()
-                
-            for k,v in runParameters.items():
-                parameterRow["varName"]=str(k)
-                parameterRow["varType"]=runType
-                parameterRow["varValue"]=str(v)
-                parameterRow.append()
-            
-            del parameterRow
-            parameterTable.close()
-
-        # need a table def
-        # and a transition log
-        elif msg[0]=="registerTransitionType":
-            # change lists to enumerations!
-            theColumns={}
-            for name, col in msg[2].items():
-                if type(col) in [list,tuple]:
-                    col=tables.EnumCol(tables.Enum(col), "start", "uint16") # @UndefinedVariable
-                elif type(col) is str:
-                    col=eval(col) # ToDo: remove eval
-                theColumns[name]=col
-                    
-            # gets species name and table format as dict
-            transitions=type("transitions", (tables.IsDescription,), theColumns)
-            theTable=theFile.create_table("/transitionLogs", msg[1], transitions, filters=tables.Filters(complevel=9, complib="lzo", least_significant_digit=3))
-            speciesTables[msg[1]]=theTable
-
-        elif msg[0]=="logTransition":
-            # gets species name and values in order as defined by the table format
-            # todo: check the format!
-            table=speciesTables[msg[1]]
-            row=table.row
-            agentId, t1, t2, fromState, toState, effort=msg[2]
-            row["agentId"]=agentId
-            row["timeStamp"]=t2
-            row["fromState"]=table.coldescrs["fromState"].enum[fromState if fromState else "start"]
-            row["toState"]=table.coldescrs["toState"].enum[toState if toState else "start"]
-            row["dwellTime"]=t2-t1
-            row["effort"]=effort
-
-            if len(msg)>2:
-                for name, value in msg[3].items():
-                    row[name]=value
-            row.append()
-        
-        # also a progress table
-        elif msg[0]=="progress":
-            # if not there, create new table
-            if "/progress" not in theFile:
-                theFile.create_table('/', 'progress', offloadedHdfLogger.hdfProgressTable)
-            # add values as they are...
-            theFile.root.progress.append([msg[1]])
-            
-        elif msg[0]=="message":
-            theLog.append(numpy.array([str(msg[1])], dtype="S120"))
-
-        elif msg[0]=="end":
-            break
-        
-        else:
-            print("unknown type {}".format(msg[0]))
-
-    #messagequeue.close()
-    messagepipe.close()
-    # done
-    del speciesTables
-    # and end
-    print("finished ", messagepipe)
-    theFile.close()
-
 class offloadedHdfLogger:
-    
+
     class parameterTableFormat(tables.IsDescription):
         # inherits the limits of the ABMsimulations.parameters table
         varName=tables.StringCol(64) #@UndefinedVariable
         varType=tables.EnumCol(tables.Enum(["INT", "FLOAT", "BOOL", "STR", "RUN"]), "STR", "uint8") #@UndefinedVariable
         varValue=tables.StringCol(128) #@UndefinedVariable
-    
+     
     class hdfProgressTable(tables.IsDescription):
         timeStep = tables.Float64Col(pos=1) # @UndefinedVariable
         machineTime = tables.Float64Col(pos=2) # @UndefinedVariable
         agentNo = tables.Int64Col(pos=3) # @UndefinedVariable
         eventNo = tables.Int64Col(pos=4) # @UndefinedVariable
         memSize = tables.Int64Col(pos=5) # @UndefinedVariable
-            
+
+    @staticmethod
+    def offloadedProcess(logFileName, messagepipe):
+        theFile=tables.open_file(logFileName, "w") #, driver="H5FD_CORE")
+        theFile.create_group("/", "transitionLogs")
+        theLog=theFile.create_earray(where=theFile.root,
+                                     name="log",
+                                     atom=tables.StringAtom(itemsize=120),
+                                     shape=(0,),
+                                     title="log messages",
+                                     filters=tables.Filters(complevel=9, complib='zlib'))
+        speciesTables={}
+    
+        try:
+            # do a loop!
+            while True:
+                try:
+                    msg=messagepipe.recv()
+                    #msg=messagequeue.get()
+                except EOFError:
+                    break
+                if msg[0]=="parameters":
+                    # expect two dictionaries
+                    parameters, runParameters=msg[1], msg[2]
+                    if "/parameters" in theFile:
+                        parameterTable=theFile.root.parameters
+                    else:
+                        parameterTable=theFile.create_table("/", "parameters", offloadedHdfLogger.parameterTableFormat)
+                    parameterRow=parameterTable.row
+                    
+                    varTypeEnum=parameterTable.coldescrs["varType"].enum
+                    varTypeDict={int:   varTypeEnum["INT"],
+                                 str:   varTypeEnum["STR"],
+                                 float: varTypeEnum["FLOAT"],
+                                 bool:  varTypeEnum["BOOL"]}
+                    runType=varTypeEnum["RUN"]
+                    
+                    for k,v in parameters.items():
+                        varType=varTypeDict[type(v)]
+                        parameterRow["varName"]=str(k)
+                        parameterRow["varType"]=varType
+                        parameterRow["varValue"]=str(v)
+                        parameterRow.append()
+                        
+                    for k,v in runParameters.items():
+                        parameterRow["varName"]=str(k)
+                        parameterRow["varType"]=runType
+                        parameterRow["varValue"]=str(v)
+                        parameterRow.append()
+                    
+                    parameterTable.close()
+                    del parameterRow, parameterTable
+        
+                # need a table def
+                # and a transition log
+                elif msg[0]=="registerTransitionType":
+                    # change lists to enumerations!
+                    theColumns={}
+                    for name, col in msg[2].items():
+                        if type(col) in [list,tuple]:
+                            col=tables.EnumCol(tables.Enum(col), "start", "uint16") # @UndefinedVariable
+                        elif type(col) is str:
+                            col=eval(col) # ToDo: remove eval
+                        theColumns[name]=col
+                            
+                    # gets species name and table format as dict
+                    transitions=type("transitions", (tables.IsDescription,), theColumns)
+                    speciesTables[msg[1]]=theFile.create_table("/transitionLogs", msg[1], transitions, filters=tables.Filters(complevel=9, complib="lzo", least_significant_digit=3))
+        
+                elif msg[0]=="logTransition":
+                    # gets species name and values in order as defined by the table format
+                    # todo: check the format!
+                    table=speciesTables[msg[1]]
+                    row=table.row
+                    agentId, t1, t2, fromState, toState, effort=msg[2]
+                    row["agentId"]=agentId
+                    row["timeStamp"]=t2
+                    row["fromState"]=table.coldescrs["fromState"].enum[fromState if fromState else "start"]
+                    row["toState"]=table.coldescrs["toState"].enum[toState if toState else "start"]
+                    row["dwellTime"]=t2-t1
+                    row["effort"]=effort
+        
+                    if len(msg)>2:
+                        for name, value in msg[3].items():
+                            row[name]=value
+                    row.append()
+                    del table, row
+    
+                # also a progress table
+                elif msg[0]=="progress":
+                    # if not there, create new table
+                    if "/progress" not in theFile:
+                        theFile.create_table('/', 'progress', offloadedHdfLogger.hdfProgressTable)
+                    # add values as they are...
+                    theFile.root.progress.append([msg[1]])
+                    
+                elif msg[0]=="message":
+                    theLog.append(numpy.array([str(msg[1])], dtype="S120"))
+        
+                elif msg[0]=="end":
+                    break
+                
+                else:
+                    print("unknown type {}".format(msg[0]))
+        except:
+            raise
+        finally:
+            #messagequeue.close()
+            messagepipe.close()
+            #print("finished ", messagepipe)
+            # done, be pedantic about closing all resources
+            for t in speciesTables.values():
+                t.close()
+                del t
+            del speciesTables
+            theLog.close()
+            del theLog
+            theFile.close()
+            del theFile
+    
     def __init__(self, filename):
         self.speciesTables={}
         self.recvPipe, self.msgPipe = Pipe(duplex=False)
-        self.loggingProcess=Process(target=offloadedProcess, args=(filename, self.recvPipe))
+        self.loggingProcess=Process(target=offloadedHdfLogger.offloadedProcess, args=(filename, self.recvPipe))
         # queue is even slower!
         #self.msgQueue=JoinableQueue()
-        #self.loggingProcess=Process(target=self.offloadedProcess, args=(filename, self.msgQueue))
-        print("started with", self.recvPipe)
+        #self.loggingProcess=Process(target=offloadedHdfLogger.offloadedProcess, args=(filename, self.msgQueue))
+        #print("started with", self.recvPipe)
         self.loggingProcess.start()
         
     def __del__(self):
