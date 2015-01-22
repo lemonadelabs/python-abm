@@ -23,14 +23,14 @@ class TestPrameters(unittest.TestCase):
     def testCreationTermination(self):
         o=offloadedHdfLogger(self.fileName)
         del o
-        self.assertTrue(tables.isPyTablesFile(self.fileName), "expecting hdf file {:s}".format(self.fileName))
+        self.assertTrue(tables.is_pytables_file(self.fileName), "expecting hdf file {:s}".format(self.fileName))
     
     def testParameters(self):
         parameterSet={"bla":"bla", "blub":3}
         o=offloadedHdfLogger(self.fileName)
         o.writeParameters(parameterSet)
         del o
-        self.assertTrue(tables.isPyTablesFile(self.fileName), "expecting hdf file {:s}".format(self.fileName))
+        self.assertTrue(tables.is_pytables_file(self.fileName), "expecting hdf file {:s}".format(self.fileName))
 
         logFile=tables.open_file(self.fileName)
         self.assertTrue("/parameters" in logFile)
@@ -49,7 +49,7 @@ class TestPrameters(unittest.TestCase):
         for _ in range(repeatNo):
             o.writeParameters(parameterSet)
         del o
-        self.assertTrue(tables.isPyTablesFile(self.fileName), "expecting hdf file {:s}".format(self.fileName))
+        self.assertTrue(tables.is_pytables_file(self.fileName), "expecting hdf file {:s}".format(self.fileName))
 
         logFile=tables.open_file(self.fileName)
         self.assertTrue("/parameters" in logFile)
@@ -104,7 +104,7 @@ class testProgressReporting(unittest.TestCase):
         for _ in range(progressIter):
             o.logProgress()
         del o
-        self.assertTrue(tables.isPyTablesFile(self.fileName), "expecting hdf file {:s}".format(self.fileName))
+        self.assertTrue(tables.is_pytables_file(self.fileName), "expecting hdf file {:s}".format(self.fileName))
         logFile=tables.open_file(self.fileName, 'r')
         self.assertTrue("/progress" in logFile, "expecting progress log table")
         progressTable=logFile.root.progress.read()
@@ -125,7 +125,7 @@ class testMessageLogging(unittest.TestCase):
         for i in range(progressIter):
             o.logMessage("message {:d}".format(i))
         del o
-        self.assertTrue(tables.isPyTablesFile(self.fileName), "expecting hdf file {:s}".format(self.fileName))
+        self.assertTrue(tables.is_pytables_file(self.fileName), "expecting hdf file {:s}".format(self.fileName))
         logFile=tables.open_file(self.fileName, 'r')
         self.assertTrue("/log" in logFile, "expecting message log table")
         logTable=logFile.root.log.read()
@@ -195,7 +195,7 @@ class TestFull(unittest.TestCase):
         del o
         
         # find out whether report is there
-        self.assertTrue(tables.isPyTablesFile(self.fileName), "expecting hdf file {:s}".format(self.fileName))
+        self.assertTrue(tables.is_pytables_file(self.fileName), "expecting hdf file {:s}".format(self.fileName))
 
         logFile=tables.open_file(self.fileName, "r")
         self.assertTrue("/transitionLogs/flipFlopAgent" in logFile, "expecting transition table")
@@ -230,7 +230,7 @@ class TestFull(unittest.TestCase):
         del o
 
         # find out whether report is there
-        self.assertTrue(tables.isPyTablesFile(self.fileName), "expecting hdf file {:s}".format(self.fileName))
+        self.assertTrue(tables.is_pytables_file(self.fileName), "expecting hdf file {:s}".format(self.fileName))
 
         logFile=tables.open_file(self.fileName, "r")
         self.assertTrue("/transitionLogs/flipFlopAgent" in logFile, "expecting transition table")
@@ -254,8 +254,6 @@ class testBenchmark(unittest.TestCase):
             os.unlink(fileName)
 
         simTime=1000000
-        import cProfile
-        pr=cProfile.Profile()
 
         self.agentWorld=world()
         flipFlopAgent(self.agentWorld)
@@ -263,18 +261,14 @@ class testBenchmark(unittest.TestCase):
         #r=hdfReporting.progressMonitor(self.agentWorld, self.agentWorld.theLogger.logProgress)
         #r.start()
         t=time.time()
-        pr.enable()
         self.agentWorld.theScheduler.eventLoop(simTime)
-        pr.disable()
         #r.quitFlag.set()
         #r.join()
         #del r
         self.agentWorld.theLogger=None
         print("offLoad", time.time()-t)
-        pr.dump_stats('offLoad.profile')
-        del pr
 
-        # old hdf thingy
+        # the old hdf thingy
         self.agentWorld=world()
         flipFlopAgent(self.agentWorld)
         self.agentWorld.theLogger=hdfLogger(fileName)
@@ -282,3 +276,21 @@ class testBenchmark(unittest.TestCase):
         self.agentWorld.theScheduler.eventLoop(simTime)
         self.agentWorld.theLogger=None
         print("same process", time.time()-t)
+
+    def testProfiling(self):
+        fileNameOffload="test1.hdf"
+        if os.path.isfile(fileNameOffload):
+            os.unlink(fileNameOffload)
+        simTime=1000000
+        import cProfile
+        pr=cProfile.Profile()
+
+        self.agentWorld=world()
+        flipFlopAgent(self.agentWorld)
+        self.agentWorld.theLogger=offloadedHdfLogger(fileNameOffload)
+        pr.enable()
+        self.agentWorld.theScheduler.eventLoop(simTime)
+        pr.disable()
+        self.agentWorld.theLogger=None
+        pr.dump_stats('offLoad.profile')
+        del pr
