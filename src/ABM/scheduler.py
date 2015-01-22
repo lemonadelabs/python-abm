@@ -5,10 +5,8 @@ Created on 2/09/2014
 '''
 
 import heapq
-import collections
 import math
 import threading
-import random
 
 class scheduler:
     # loosely follows the sched.scheduler implementation (well, it is anyway the obvious thing to do)
@@ -18,10 +16,6 @@ class scheduler:
     # repetition time for generating new agents
     # events can be scheduled with higher precision (i.e. do not have to stick to multiples of time step), but their repetition time is limited to timeStep 
 
-    #event=collections.namedtuple("event", ["timestamp", "agentID", "method"])
-    # do compare time stamps, but not methods
-    #event.__lt__=lambda x,y: x[0]<y[0]
-    
     def __init__(self, theWorld):
         self.theWorld=theWorld
 
