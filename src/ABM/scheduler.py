@@ -91,11 +91,13 @@ class scheduler:
             try:
                 # do the work!
                 retval=exec_next()
-            except Exception as e:
-                raise
-                print(str(e))
+            except Exception:
+                # todo: throw out event (print nice stack trace)
                 exec_next=None
                 retval=None
+                raise
+            # the heap might have been modified by the event
+            theHeap=self.schedule_heap
 
             if retval is not None:
                 if type(retval) in [float, int]:
@@ -128,7 +130,6 @@ class scheduler:
                 else:
                     timeStamp=None
                     exec_next=None
-
         # end of while loop!
         
         if exec_next is not None:
