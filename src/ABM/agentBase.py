@@ -5,7 +5,6 @@ Created on 2/09/2014
 '''
 
 import collections
-import sys
 
 class agentBase:    
     
