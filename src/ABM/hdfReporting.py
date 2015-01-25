@@ -4,14 +4,14 @@ Created on 2/09/2014
 @author: achim
 '''
 import tables
-import resource
-import os
 import sys
 import time
 import threading
 from multiprocessing import Process, Pipe, Queue, JoinableQueue # @UnusedImport
 import types
 import numpy
+
+from ABM.reporting import offloadedReporting
 
 from ABM import fsmAgent
 
@@ -53,7 +53,8 @@ class progressMonitor(threading.Thread):
         except Exception:
             self.quitFlag.set()
 
-class offloadedHdfLogger:
+
+class OffloadHDF(Process):
 
     class parameterTableFormat(tables.IsDescription):
         # inherits the limits of the ABMsimulations.parameters table
@@ -68,9 +69,14 @@ class offloadedHdfLogger:
         eventNo = tables.Int64Col(pos=4) # @UndefinedVariable
         memSize = tables.Int64Col(pos=5) # @UndefinedVariable
 
-    @staticmethod
-    def offloadedProcess(logFileName, messagepipe):
-        theFile=tables.open_file(logFileName, "w") #, driver="H5FD_CORE")
+    def __init__(self, hdfFileName, transitionsPipe):
+        self.hdfFileName=hdfFileName
+        self.transitionsPipe=transitionsPipe
+        super().__init__()
+
+    def run(self):
+        
+        theFile=tables.open_file(self.hdfFileName, "w") #, driver="H5FD_CORE")
         theFile.create_group("/", "transitionLogs")
         theLog=theFile.create_earray(where=theFile.root,
                                      name="log",
@@ -84,7 +90,7 @@ class offloadedHdfLogger:
             # do a loop!
             while True:
                 try:
-                    msg=messagepipe.recv()
+                    msg=self.transitionsPipe.recv()
                     #msg=messagequeue.get()
                 except EOFError:
                     break
@@ -94,7 +100,7 @@ class offloadedHdfLogger:
                     if "/parameters" in theFile:
                         parameterTable=theFile.root.parameters
                     else:
-                        parameterTable=theFile.create_table("/", "parameters", offloadedHdfLogger.parameterTableFormat)
+                        parameterTable=theFile.create_table("/", "parameters", OffloadHDF.parameterTableFormat)
                     parameterRow=parameterTable.row
                     
                     varTypeEnum=parameterTable.coldescrs["varType"].enum
@@ -159,7 +165,7 @@ class offloadedHdfLogger:
                 elif msg[0]=="progress":
                     # if not there, create new table
                     if "/progress" not in theFile:
-                        theFile.create_table('/', 'progress', offloadedHdfLogger.hdfProgressTable)
+                        theFile.create_table('/', 'progress', OffloadHDF.hdfProgressTable)
                     # add values as they are...
                     theFile.root.progress.append([msg[1]])
                     
@@ -175,7 +181,7 @@ class offloadedHdfLogger:
             raise
         finally:
             #messagequeue.close()
-            messagepipe.close()
+            self.transitionsPipe.close()
             #print("finished ", messagepipe)
             # done, be pedantic about closing all resources
             for t in speciesTables.values():
@@ -186,106 +192,21 @@ class offloadedHdfLogger:
             del theLog
             theFile.close()
             del theFile
+
+
+class offloadedHdfLogger(offloadedReporting):
     
     def __init__(self, filename):
-        self.speciesTables={}
-        self.recvPipe, self.msgPipe = Pipe(duplex=False)
-        self.loggingProcess=Process(target=offloadedHdfLogger.offloadedProcess, args=(filename, self.recvPipe))
+        super().__init__()
+        recvPipe, msgPipe = Pipe(duplex=False)
+        self.outputPipes.append(msgPipe)
+        self.loggingProcess=OffloadHDF(filename, recvPipe)
         # queue is even slower!
         #self.msgQueue=JoinableQueue()
         #self.loggingProcess=Process(target=offloadedHdfLogger.offloadedProcess, args=(filename, self.msgQueue))
         #print("started with", self.recvPipe)
         self.loggingProcess.start()
-        
-    def __del__(self):
-        if hasattr(self, "msgPipe"):
-            self.msgPipe.send(["end"])
-            self.recvPipe.close()
-            self.msgPipe.close()
-            del self.msgPipe, self.recvPipe
-        if hasattr(self, "msgQueue"):
-            self.msgQueue.put(["end"])
-            self.msgQueue.close()
-            del self.msgQueue
-        if hasattr(self, "loggingProcess"):
-            self.loggingProcess.join()
-            del self.loggingProcess
-
-    def registerTransitionTable(self, agent, extraParameterTypes={}, stateNames=None):
-        # see whether this is already registered
-        if not isinstance(agent, fsmAgent):
-            raise TypeError("{:s} is not an fsmAgent".format(str(agent)))
-        
-        agentType=type(agent)
-        # initialize the enum list
-        if stateNames is None:
-            stateNames=set(["start", "end"]) # default, must be there
-            for attr in dir(agent):
-                nameSplit=attr.split("_")
-                if len(nameSplit)>=2 and nameSplit[0] in ["enter", "leave", "activity"]:
-                    attr_object=getattr(agent, attr)
-                    attr_name="_".join(nameSplit[1:])
-                    if type(attr_object) is types.MethodType:
-                        stateNames.add(attr_name)
-
-        stateNames=list(stateNames)
-        stateNames.sort()
-        tableDef={ "timeStamp": tables.Float64Col(), # @UndefinedVariable
-                  "fromState": stateNames,
-                  "toState": stateNames,
-                  "dwellTime":tables.Float32Col(), # @UndefinedVariable
-                  "effort": tables.Float32Col(),   # @UndefinedVariable
-                  "agentId": tables.UInt64Col()}  # @UndefinedVariable
-        
-        tableDef.update(extraParameterTypes)
-        # and then handle the extra parameters!
-        # how to get the extra parameters?
-        
-        self.msgPipe.send(["registerTransitionType", str(agentType.__name__), tableDef])
-        #self.msgQueue.put_nowait(["registerTransitionType", str(agentType.__name__), tableDef])
-        self.speciesTables[agentType]=tableDef
-
-    def reportTransition(self, agent, s1, s2, t1, t2, **extraParams):
-
-        # see whether this is already registered
-        if not isinstance(agent, fsmAgent):
-            raise TypeError("{:s} is not an fsmAgent".format(str(agent)))
-
-        agentType=type(agent)
-        if agentType not in self.speciesTables:
-            # create agent table on the fly
-            self.registerTransitionTable(agent)
-        
-        # that's the order expected for msg[2]: agentId, t1, t2, fromState, toState, effort
-        self.msgPipe.send(["logTransition", str(agentType.__name__), [agent.agentId, t1, t2, s1, s2, agent.effort], extraParams])
-        #self.msgQueue.put_nowait(["logTransition", str(agentType.__name__), [agent.agentId, t1, t2, s1, s2, agent.effort], extraParams])
-        
-    def logMessage(self, message):
-        self.msgPipe.send(["message", message])
-        #self.msgQueue.put_nowait(["message", message])
-        
-    def writeParameters(self, parameters, runParameters={}):
-        self.msgPipe.send(["parameters", parameters, runParameters])
-        #self.msgQueue.put_nowait(["parameters", parameters, runParameters])
-                                
-    def logProgress(self, theWorld=None):
-        if not hasattr(self, "startTime"):
-            self.startTime=time.time()
-                    
-        statsFile=open("/proc/{:d}/statm".format(os.getpid()))
-        stats=statsFile.read().split(" ")
-        statsFile.close()
-        memSize=int(stats[5])*resource.getpagesize()
-        if theWorld is not None:
-            theData=(float(theWorld.wallClock),
-                     time.time()-self.startTime,
-                     sum([len(a) for a in theWorld.theAgents.values()]),
-                     len(theWorld.theScheduler.schedule_heap),
-                     memSize)
-        else:
-            theData=(0.0, time.time()-self.startTime, 0, 0, memSize)
-        self.msgPipe.send(["progress", theData])
-        #self.msgQueue.put_nowait(["progress", theData])
+        recvPipe.close() # is open on the other side!
 
 class hdfLogger:
     # no offloading here

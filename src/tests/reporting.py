@@ -9,8 +9,8 @@ import sys
 import time
 import tables
 
-from ABM import fsmAgent, world, hdfReporting
-from ABM.hdfReporting import offloadedHdfLogger, hdfLogger
+from ABM import fsmAgent, world
+from ABM.hdfReporting import hdfLogger, offloadedHdfLogger, progressMonitor
 
 class TestPrameters(unittest.TestCase):
     
@@ -70,7 +70,7 @@ class testProgressReporting(unittest.TestCase):
         
         reportCalls=[]
         
-        r=hdfReporting.progressMonitor(None, lambda x:reportCalls.append(x))
+        r=progressMonitor(None, lambda x:reportCalls.append(x))
         
         r.start()
         self.assertTrue(r.isAlive())
@@ -86,7 +86,7 @@ class testProgressReporting(unittest.TestCase):
         
         reportCalls=[0]*5
         
-        r=hdfReporting.progressMonitor(None, lambda x:reportCalls.pop())
+        r=progressMonitor(None, lambda x:reportCalls.pop())
         
         r.start()
         self.assertTrue(r.isAlive())
@@ -215,7 +215,7 @@ class TestFull(unittest.TestCase):
         o=self.agentWorld.theLogger=offloadedHdfLogger(self.fileName)
         # log start
 
-        r=hdfReporting.progressMonitor(self.agentWorld, o.logProgress)
+        r=progressMonitor(self.agentWorld, o.logProgress)
         
         r.start()
         schedulerIter=10
