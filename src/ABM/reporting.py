@@ -7,6 +7,7 @@ import types
 import resource
 import time
 import os
+from multiprocessing.reduction import ForkingPickler
 
 from . import fsmAgent
 
@@ -29,8 +30,9 @@ class offloadedReporting:
             del self.loggingProcess
 
     def send(self, message):
+        msgSerialized=ForkingPickler.dumps(message)
         for p in self.outputPipes:
-            p.send(message)
+            p._send_bytes(msgSerialized)
 
     def registerTransitionTable(self, agent, extraParameterTypes={}, stateNames=None):
         # see whether this is already registered
