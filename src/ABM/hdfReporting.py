@@ -75,7 +75,7 @@ class OffloadHDF(Process):
         super().__init__()
 
     def run(self):
-        
+ 
         theFile=tables.open_file(self.hdfFileName, "w") #, driver="H5FD_CORE")
         theFile.create_group("/", "transitionLogs")
         theLog=theFile.create_earray(where=theFile.root,
@@ -142,6 +142,31 @@ class OffloadHDF(Process):
                     transitions=type("transitions", (tables.IsDescription,), theColumns)
                     speciesTables[msg[1]]=theFile.create_table("/transitionLogs", msg[1], transitions, filters=tables.Filters(complevel=9, complib="lzo", least_significant_digit=3))
         
+                elif msg[0]=="changeFile":
+                    # close tables and file
+                    for t in speciesTables.values():
+                        t.close()
+                        del t
+                    del speciesTables
+                    theLog.close()
+                    del theLog
+                    theFile.close()
+                    del theFile
+
+                    # set new file name
+                    self.hdfFileName=msg[1]
+                    # open new one
+                    theFile=tables.open_file(self.hdfFileName, "w") #, driver="H5FD_CORE")
+                    theFile.create_group("/", "transitionLogs")
+                    theLog=theFile.create_earray(where=theFile.root,
+                                                 name="log",
+                                                 atom=tables.StringAtom(itemsize=120),
+                                                 shape=(0,),
+                                                 title="log messages",
+                                                 filters=tables.Filters(complevel=9, complib='zlib'))
+                    speciesTables={}
+                    # expecting replay of species tables
+        
                 elif msg[0]=="logTransition":
                     # gets species name and values in order as defined by the table format
                     # todo: check the format!
@@ -207,6 +232,12 @@ class offloadedHdfLogger(offloadedReporting):
         #print("started with", self.recvPipe)
         self.loggingProcess.start()
         recvPipe.close() # is open on the other side!
+
+    def changeLoggingFile(self, filename):
+        self.send(["changeFile", filename])
+        # replay all the table definitions
+        for agentType, tableDef in self.speciesTables.items():
+            self.send(["registerTransitionType", str(agentType.__name__), tableDef])
 
 class hdfLogger:
     # no offloading here
