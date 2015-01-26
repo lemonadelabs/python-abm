@@ -90,8 +90,9 @@ class HDFLoggingProcess(Process):
                     # change lists to enumerations!
                     theColumns={}
                     for name, col in msg[2].items():
-                        if type(col) in [list,tuple]:
+                        if type(col) is dict:
                             col=tables.EnumCol(tables.Enum(col), "start", "uint16") # @UndefinedVariable
+                            #col=tables.EnumCol(tables.Enum(col), "start", "uint16") # @UndefinedVariable
                         elif type(col) is str:
                             col=eval(col) # ToDo: remove eval
                         theColumns[name]=col
@@ -133,8 +134,8 @@ class HDFLoggingProcess(Process):
                     agentId, t1, t2, fromState, toState, effort=msg[2]
                     row["agentId"]=agentId
                     row["timeStamp"]=t2
-                    row["fromState"]=table.coldescrs["fromState"].enum[fromState if fromState else "start"]
-                    row["toState"]=table.coldescrs["toState"].enum[toState if toState else "start"]
+                    row["fromState"]=fromState
+                    row["toState"]=toState
                     row["dwellTime"]=t2-t1
                     row["effort"]=effort
         

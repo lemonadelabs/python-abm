@@ -59,6 +59,7 @@ class offloadedReporting:
     
     def __init__(self):
         self.speciesTables={}
+        self.stateDicts={}
         self.outputPipes=[]
         
     def __del__(self):
@@ -95,11 +96,11 @@ class offloadedReporting:
                     if type(attr_object) is types.MethodType:
                         stateNames.add(attr_name)
 
-        stateNames=list(stateNames)
-        stateNames.sort()
+        stateDict=dict((n,i) for i,n in enumerate(sorted(stateNames)))
+                
         tableDef={ "timeStamp": "tables.Float64Col()", # @UndefinedVariable
-                  "fromState": stateNames,
-                  "toState": stateNames,
+                  "fromState": stateDict,
+                  "toState": stateDict,
                   "dwellTime":"tables.Float32Col()", # @UndefinedVariable
                   "effort": "tables.Float32Col()",   # @UndefinedVariable
                   "agentId": "tables.UInt64Col()"}  # @UndefinedVariable
@@ -111,6 +112,7 @@ class offloadedReporting:
         self.send(["registerTransitionType", str(agentType.__name__), tableDef])
         #self.msgQueue.put_nowait(["registerTransitionType", str(agentType.__name__), tableDef])
         self.speciesTables[agentType]=tableDef
+        self.stateDicts[agentType]=stateDict
 
     def reportTransition(self, agent, s1, s2, t1, t2, **extraParams):
 
@@ -123,8 +125,12 @@ class offloadedReporting:
             # create agent table on the fly
             self.registerTransitionTable(agent)
         
+        stateDict=self.stateDicts[agentType]
         # that's the order expected for msg[2]: agentId, t1, t2, fromState, toState, effort
-        self.send(["logTransition", str(agentType.__name__), [agent.agentId, t1, t2, s1, s2, agent.effort], extraParams])
+        self.send(["logTransition",
+                   str(agentType.__name__),
+                   [agent.agentId, t1, t2, stateDict[s1], stateDict[s2], agent.effort],
+                   extraParams])
         #self.msgQueue.put_nowait(["logTransition", str(agentType.__name__), [agent.agentId, t1, t2, s1, s2, agent.effort], extraParams])
         
     def logMessage(self, message):
