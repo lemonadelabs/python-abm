@@ -4,57 +4,15 @@ Created on 2/09/2014
 @author: achim
 '''
 import tables
-import sys
-import time
-import threading
-from multiprocessing import Process, Pipe, Queue, JoinableQueue # @UnusedImport
 import types
+from multiprocessing import Process, Pipe, Queue, JoinableQueue # @UnusedImport
+
 import numpy
 
 from ABM.reporting import offloadedReporting
-
 from ABM import fsmAgent
 
-class progressMonitor(threading.Thread):
-    
-    # the schedule contains tuples (a,b)
-    # meaning: till a seconds log in an interval of b seconds
-    
-    schedule=[(200,100), (20,10), (2,1), (0.2, 0.1)]
-    minInterval=0.05
-
-    def __init__(self, theWorld, logOutput):
-        self.theWorld=theWorld
-        self.logAction=logOutput
-        self.quitFlag=threading.Event()
-        self.quitFlag.clear()
-        threading.Thread.__init__(self)
-
-    def run(self):
-        self.startTime=time.time()
-        
-        while not self.quitFlag.is_set():
-            try:
-                self.logAction(self.theWorld)
-            except Exception as e:
-                print("Error in progress logging: {}".format(e), file=sys.stderr)
-                self.quitFlag.set()
-                return
-            # determine next tick
-            theRunTime=time.time()-self.startTime
-            timeInterval=0.0
-            for runTime, timeInterval in self.schedule:
-                if theRunTime>runTime:
-                    break
-            self.quitFlag.wait(max(timeInterval, self.minInterval))
-
-        try:
-            self.logAction(self.theWorld)
-        except Exception:
-            self.quitFlag.set()
-
-
-class OffloadHDF(Process):
+class HDFLoggingProcess(Process):
 
     class parameterTableFormat(tables.IsDescription):
         # inherits the limits of the ABMsimulations.parameters table
@@ -100,7 +58,7 @@ class OffloadHDF(Process):
                     if "/parameters" in theFile:
                         parameterTable=theFile.root.parameters
                     else:
-                        parameterTable=theFile.create_table("/", "parameters", OffloadHDF.parameterTableFormat)
+                        parameterTable=theFile.create_table("/", "parameters", HDFLoggingProcess.parameterTableFormat)
                     parameterRow=parameterTable.row
                     
                     varTypeEnum=parameterTable.coldescrs["varType"].enum
@@ -190,7 +148,7 @@ class OffloadHDF(Process):
                 elif msg[0]=="progress":
                     # if not there, create new table
                     if "/progress" not in theFile:
-                        theFile.create_table('/', 'progress', OffloadHDF.hdfProgressTable)
+                        theFile.create_table('/', 'progress', HDFLoggingProcess.hdfProgressTable)
                     # add values as they are...
                     theFile.root.progress.append([msg[1]])
                     
@@ -207,6 +165,7 @@ class OffloadHDF(Process):
         finally:
             #messagequeue.close()
             self.transitionsPipe.close()
+            del self.transitionsPipe
             #print("finished ", messagepipe)
             # done, be pedantic about closing all resources
             for t in speciesTables.values():
@@ -218,18 +177,13 @@ class OffloadHDF(Process):
             theFile.close()
             del theFile
 
-
 class offloadedHdfLogger(offloadedReporting):
     
     def __init__(self, filename):
         super().__init__()
         recvPipe, msgPipe = Pipe(duplex=False)
         self.outputPipes.append(msgPipe)
-        self.loggingProcess=OffloadHDF(filename, recvPipe)
-        # queue is even slower!
-        #self.msgQueue=JoinableQueue()
-        #self.loggingProcess=Process(target=offloadedHdfLogger.offloadedProcess, args=(filename, self.msgQueue))
-        #print("started with", self.recvPipe)
+        self.loggingProcess=HDFLoggingProcess(filename, recvPipe)
         self.loggingProcess.start()
         recvPipe.close() # is open on the other side!
 

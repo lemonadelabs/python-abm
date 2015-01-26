@@ -7,15 +7,59 @@ import types
 import resource
 import time
 import os
+import sys
+import threading
+
 from multiprocessing.reduction import ForkingPickler
 
 from . import fsmAgent
+
+class progressMonitor(threading.Thread):
+    
+    # the schedule contains tuples (a,b)
+    # meaning: till a seconds log in an interval of b seconds
+    
+    schedule=[(200,100), (20,10), (2,1), (0.2, 0.1)]
+    minInterval=0.05
+
+    def __init__(self, theWorld, logOutput):
+        self.theWorld=theWorld
+        self.logAction=logOutput
+        self.quitFlag=threading.Event()
+        self.quitFlag.clear()
+        threading.Thread.__init__(self)
+
+    def run(self):
+        self.startTime=time.time()
+        
+        while not self.quitFlag.is_set():
+            try:
+                self.logAction(self.theWorld)
+            except Exception as e:
+                print("Error in progress logging: {}".format(e), file=sys.stderr)
+                self.quitFlag.set()
+                return
+            # determine next tick
+            theRunTime=time.time()-self.startTime
+            timeInterval=0.0
+            for runTime, timeInterval in self.schedule:
+                if theRunTime>runTime:
+                    break
+            self.quitFlag.wait(max(timeInterval, self.minInterval))
+
+        try:
+            self.logAction(self.theWorld)
+        except Exception:
+            self.quitFlag.set()
+
+        del self.theWorld
+        del self.logAction
 
 class offloadedReporting:
     
     def __init__(self):
         self.speciesTables={}
-        self.outputPipes=[]        
+        self.outputPipes=[]
         
     def __del__(self):
 

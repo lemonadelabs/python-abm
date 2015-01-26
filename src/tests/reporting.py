@@ -10,7 +10,8 @@ import time
 import tables
 
 from ABM import fsmAgent, world
-from ABM.hdfReporting import hdfLogger, offloadedHdfLogger, progressMonitor
+from ABM.hdfReporting import hdfLogger, offloadedHdfLogger
+from ABM.reporting import progressMonitor
 
 class TestPrameters(unittest.TestCase):
     
