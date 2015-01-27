@@ -75,9 +75,16 @@ class offloadedReporting:
             del self.loggingProcess
 
     def send(self, message):
+        brokenPipes=[]
         msgSerialized=ForkingPickler.dumps(message)
         for p in self.outputPipes:
-            p._send_bytes(msgSerialized)
+            try:
+                p._send_bytes(msgSerialized)
+            except BrokenPipeError:
+                print("pipe", p, "is broken, removing from output pipes")
+                brokenPipes.append(p)
+        for p in brokenPipes:
+            self.outputPipes.remove(p)
 
     def registerTransitionTable(self, agent, extraParameterTypes={}, stateNames=None):
         # see whether this is already registered
