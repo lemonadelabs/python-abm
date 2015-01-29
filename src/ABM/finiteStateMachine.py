@@ -25,34 +25,35 @@ class fsmAgent(agentBase):
 
     def __doFSMActions(self):
         wallClock=self.myWorld.wallClock
+        if wallClock<self.nextActivity:
+            return self.nextActivity
         nextState=self.nextState
         state=self.state
         if state!=nextState:
-            if wallClock<=self.nextActivity:
-                leaveMethod=getattr(self, "leave_"+self.state, None)
-                if leaveMethod is not None:
-                    leaveMethod()
+            leaveMethod=getattr(self, "leave_"+state, None)
+            if leaveMethod is not None:
+                leaveMethod()
 
-                # report transition
-                reportTransition=getattr(self, "reportTransition", None)
-                if reportTransition:
-                    reportTransition(state, nextState, self.lastTransition, wallClock)
-                self.effort=0.0
-                
-                enterMethod=getattr(self, "enter_"+nextState, None)
-                if enterMethod is not None:
-                    enterMethod()
+            # report transition
+            reportTransition=getattr(self, "reportTransition", None)
+            if reportTransition:
+                reportTransition(state, nextState, self.lastTransition, wallClock)
+            self.effort=0.0
+            
+            enterMethod=getattr(self, "enter_"+nextState, None)
+            if enterMethod is not None:
+                enterMethod()
 
-                self.lastTransition=wallClock
-                self.state=nextState
+            self.lastTransition=wallClock
+            self.state=nextState
 
-        if nextState=="end":
-            leaveMethod=None
-            enterMethod=None
-            # make sure nothing happens anymore!
-            self.endLife()
-            #print(sys.getrefcount(self)) # <- this should be 3
-            return
+            if nextState=="end":
+                leaveMethod=None
+                enterMethod=None
+                # make sure nothing happens anymore!
+                self.endLife()
+                #print(sys.getrefcount(self)) # <- this should be 3
+                return
 
         # now do the activity!
         activityMethod=getattr(self, "activity_"+nextState, None)
