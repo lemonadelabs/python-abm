@@ -124,8 +124,8 @@ class offloadedReporting:
     def reportTransition(self, agent, s1, s2, t1, t2, **extraParams):
 
         # see whether this is already registered
-        if not isinstance(agent, fsmAgent):
-            raise TypeError("{:s} is not an fsmAgent".format(str(agent)))
+        #if not isinstance(agent, fsmAgent):
+        #    raise TypeError("{:s} is not an fsmAgent".format(str(agent)))
 
         agentType=type(agent)
         if agentType not in self.speciesTables:
@@ -135,18 +135,15 @@ class offloadedReporting:
         stateDict=self.stateDicts[agentType]
         # that's the order expected for msg[2]: agentId, t1, t2, fromState, toState, effort
         self.send(["logTransition",
-                   str(agentType.__name__),
+                   agentType.__name__,
                    [agent.agentId, t1, t2, stateDict[s1], stateDict[s2], agent.effort],
                    extraParams])
-        #self.msgQueue.put_nowait(["logTransition", str(agentType.__name__), [agent.agentId, t1, t2, s1, s2, agent.effort], extraParams])
         
     def logMessage(self, message):
         self.send(["message", message])
-        #self.msgQueue.put_nowait(["message", message])
         
     def writeParameters(self, parameters, runParameters={}):
         self.send(["parameters", parameters, runParameters])
-        #self.msgQueue.put_nowait(["parameters", parameters, runParameters])
                                 
     def logProgress(self, theWorld=None):
         if not hasattr(self, "startTime"):
@@ -165,4 +162,3 @@ class offloadedReporting:
         else:
             theData=(0.0, time.time()-self.startTime, 0, 0, memSize)
         self.send(["progress", theData])
-        #self.msgQueue.put_nowait(["progress", theData])
