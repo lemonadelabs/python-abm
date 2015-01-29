@@ -36,7 +36,7 @@ class basicsTest(unittest.TestCase):
 
     def testAgentBase(self):        
         w=world()
-        a=agentBase(w)        
+        a=agentBase(w)
 
         # check on wall clock 
         self.assertEqual(a.wallClock(), 0)
@@ -52,9 +52,9 @@ class basicsTest(unittest.TestCase):
         w=world()
         a=fsmTest(w)
         w.theScheduler.eventLoop(120)
-        self.assertListEqual(a.transitionEvents, [(i*30.0+30, ('flip', 'flop')[i%2]) for i in range(4)])
+        self.assertListEqual(a.transitionEvents, [(i*30.0+60, ('flop', 'flip')[i%2]) for i in range(3)])
         w.theScheduler.eventLoop(240)
-        self.assertListEqual(a.transitionEvents, [(i*30.0+30, ('flip', 'flop')[i%2]) for i in range(8)])
+        self.assertListEqual(a.transitionEvents, [(i*30.0+60, ('flop', 'flip')[i%2]) for i in range(7)])
 
     def testPeriodic(self):
         w=world()

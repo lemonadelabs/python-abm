@@ -24,26 +24,29 @@ class fsmAgent(agentBase):
         theWorld.theScheduler.addEvent(0.0, self.__doFSMActions)
 
     def __doFSMActions(self):
-        wallClock=self.wallClock()
-        if self.state!=self.nextState:
-            if wallClock>=self.nextActivity:
+        wallClock=self.myWorld.wallClock
+        nextState=self.nextState
+        state=self.state
+        if state!=nextState:
+            if wallClock<=self.nextActivity:
                 leaveMethod=getattr(self, "leave_"+self.state, None)
                 if leaveMethod is not None:
                     leaveMethod()
 
                 # report transition
-                if hasattr(self, "reportTransition"):
-                    self.reportTransition(self.state, self.nextState, self.lastTransition, wallClock)
+                reportTransition=getattr(self, "reportTransition", None)
+                if reportTransition:
+                    reportTransition(state, nextState, self.lastTransition, wallClock)
                 self.effort=0.0
                 
-                enterMethod=getattr(self, "enter_"+self.nextState, None)
+                enterMethod=getattr(self, "enter_"+nextState, None)
                 if enterMethod is not None:
                     enterMethod()
 
                 self.lastTransition=wallClock
-                self.state=self.nextState
+                self.state=nextState
 
-        if self.state=="end":
+        if nextState=="end":
             leaveMethod=None
             enterMethod=None
             # make sure nothing happens anymore!
@@ -52,14 +55,14 @@ class fsmAgent(agentBase):
             return
 
         # now do the activity!
-        activityMethod=getattr(self, "activity_"+self.state, None)
+        activityMethod=getattr(self, "activity_"+nextState, None)
         
         if activityMethod is not None:
             activityMethod()
             # and do some re-scheduling if required
             return self.nextActivity
         else:
-            print("no state activity '{:s}' for {:s} no {:d}".format(self.state, type(self).__name__, self.agentId))
+            print("no activity '{:s}' for {:s} no {:d}".format(nextState, type(self).__name__, self.agentId))
         
     def scheduleTransition(self, nextState, transitionTime=0.0):
         # report time and effort
