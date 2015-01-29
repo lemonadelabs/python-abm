@@ -141,7 +141,10 @@ class HDFLoggingProcess(Process):
         
                     if len(msg)>2:
                         for name, value in msg[3].items():
-                            row[name]=value
+                            if type(value) is str:
+                                row[name]=numpy.array(value.encode(), dtype="S")
+                            else:
+                                row[name]=value
                     row.append()
                     del table, row
     
