@@ -27,6 +27,8 @@ class SQLscenario(SQLBase):
     value = Column(String(128))
 
 class scenario:
+    # format of parameters dictionary:
+    # name: ([None, timeStamp1, timeStamp2, ... ], [initial value, value1, value2, ....])
     
     def __init__(self):
         self.parameters={}
@@ -76,7 +78,7 @@ class scenario:
             if len(theValues)>1 and theValues[1][0] is None:
                 raise ValueError("need only one default value for '{}'".format(key))
 
-            # todo: check types of values are consistent!
+            # todo: check that types of values are consistent!
             
             sortedValues=theValues[1:]
             sortedValues.sort()
