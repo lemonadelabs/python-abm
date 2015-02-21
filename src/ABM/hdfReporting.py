@@ -55,34 +55,37 @@ class HDFLoggingProcess(Process):
                 if msg[0]=="parameters":
                     # expect two dictionaries
                     parameters, runParameters=msg[1], msg[2]
-                    if "/parameters" in theFile:
-                        parameterTable=theFile.root.parameters
-                    else:
-                        parameterTable=theFile.create_table("/", "parameters", HDFLoggingProcess.parameterTableFormat)
-                    parameterRow=parameterTable.row
-                    
-                    varTypeEnum=parameterTable.coldescrs["varType"].enum
-                    varTypeDict={int:   varTypeEnum["INT"],
-                                 str:   varTypeEnum["STR"],
-                                 float: varTypeEnum["FLOAT"],
-                                 bool:  varTypeEnum["BOOL"]}
-                    runType=varTypeEnum["RUN"]
-                    
-                    for k,v in parameters.items():
-                        varType=varTypeDict[type(v)]
-                        parameterRow["varName"]=str(k)
-                        parameterRow["varType"]=varType
-                        parameterRow["varValue"]=str(v)
-                        parameterRow.append()
+
+                    if type(parameters) is dict:                        
+                        if "/parameters" in theFile:
+                            parameterTable=theFile.root.parameters
+                        else:
+                            parameterTable=theFile.create_table("/", "parameters", HDFLoggingProcess.parameterTableFormat)
+                        parameterRow=parameterTable.row
+                        varTypeEnum=parameterTable.coldescrs["varType"].enum
+                        varTypeDict={int:   varTypeEnum["INT"],
+                                     str:   varTypeEnum["STR"],
+                                     float: varTypeEnum["FLOAT"],
+                                     bool:  varTypeEnum["BOOL"]}
+                        runType=varTypeEnum["RUN"]
                         
-                    for k,v in runParameters.items():
-                        parameterRow["varName"]=str(k)
-                        parameterRow["varType"]=runType
-                        parameterRow["varValue"]=str(v)
-                        parameterRow.append()
-                    
-                    parameterTable.close()
-                    del parameterRow, parameterTable
+                        for k,v in parameters.items():
+                            varType=varTypeDict[type(v)]
+                            parameterRow["varName"]=str(k)
+                            parameterRow["varType"]=varType
+                            parameterRow["varValue"]=str(v)
+                            parameterRow.append()
+                            
+                        for k,v in runParameters.items():
+                            parameterRow["varName"]=str(k)
+                            parameterRow["varType"]=runType
+                            parameterRow["varValue"]=str(v)
+                            parameterRow.append()
+                        
+                        parameterTable.close()
+                        del parameterRow, parameterTable
+                    else:
+                        print("unsupported type: {}".format(type(parameters)))
         
                 # need a table def
                 # and a transition log
