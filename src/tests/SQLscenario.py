@@ -42,6 +42,7 @@ class fromSQL(unittest.TestCase):
     def testRemovedData(self):
         session=self.sessionmaker()
         self.assertEqual(session.query(SQLscenario).filter(SQLscenario.experimentID==self.theUUID.hex).count(), 0)
+        session.close()
 
     def testWriteOne(self):
         session=self.sessionmaker()
@@ -77,3 +78,4 @@ class fromSQL(unittest.TestCase):
         s.parameters["bla"]=([None],[1])
         s.writeToMySQL(session, self.theUUID)
         self.assertEqual(session.query(SQLscenario).filter(SQLscenario.experimentID==self.theUUID.hex and SQLscenario.name=="bla").count(),1)
+        session.close()
