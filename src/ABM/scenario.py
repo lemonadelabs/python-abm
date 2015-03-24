@@ -24,7 +24,7 @@ class SQLscenario(SQLBase):
     experimentID=Column(String(32))
     name=Column(String(128))
     type_=Column(Enum("Int", "Float", "Bool"))
-    theDate = Column(DateTime(timezone=False), nullable=True)
+    date = Column(DateTime(timezone=False), nullable=True)
     value = Column(String(128))
 
 class scenario:
@@ -180,14 +180,14 @@ class scenario:
         
         if experimentID is None:
             # do not filter
-            scenarios=session.query(SQLscenario.name, SQLscenario.theDate, SQLscenario.type_, SQLscenario.value).all()
+            scenarios=session.query(SQLscenario.name, SQLscenario.date, SQLscenario.type_, SQLscenario.value).all()
         elif type(experimentID) is str:
-            scenarios=session.query(SQLscenario.name, SQLscenario.theDate, SQLscenario.type_,  SQLscenario.value).filter(SQLscenario.experimentID==experimentID).all()
+            scenarios=session.query(SQLscenario.name, SQLscenario.date, SQLscenario.type_,  SQLscenario.value).filter(SQLscenario.experimentID==experimentID).all()
         else:
-            scenarios=session.query(SQLscenario.name, SQLscenario.theDate, SQLscenario.type_,  SQLscenario.value).filter(SQLscenario.experimentID==experimentID.hex).all()
+            scenarios=session.query(SQLscenario.name, SQLscenario.date, SQLscenario.type_,  SQLscenario.value).filter(SQLscenario.experimentID==experimentID.hex).all()
 
         newParameters={}
-        for name, theDate, type_, value in scenarios:
+        for name, date, type_, value in scenarios:
             
             if type_.lower()=="float":
                 value=float(value)
@@ -199,7 +199,7 @@ class scenario:
                 raise ValueError("unknown type specification '{}'".format(type_))
             
             # oh what about the default parameter?!
-            if theDate is None:
+            if date is None:
                 if name in newParameters:
                     newParameters[name].insert(0,(None, value))
                 else:
@@ -207,9 +207,9 @@ class scenario:
 
             else:
                 if name in newParameters:
-                    newParameters[name].append((theDate, value))
+                    newParameters[name].append((date, value))
                 else:
-                    newParameters[name]=[(theDate, value),]
+                    newParameters[name]=[(date, value),]
         
         for key in list(newParameters.keys()):
             theValues=newParameters[key]
@@ -240,7 +240,7 @@ class scenario:
             theType={int: "int", float:"float", bool:"bool"}[type(values[1][0])]
             session.add_all([SQLscenario(name=name, type_=theType,
                                          experimentID=expID,
-                                         theDate=d,
+                                         date=d,
                                          value=str(v)) for d,v in zip(*values)])
         session.commit()
         
@@ -355,7 +355,7 @@ class scenario:
                     else:
                         newParameters[key]=[(None, value)]
                 else:
-                    # expect theDate and time
+                    # expect date and time
                     timeDate=self.parseTime(valueType, key)
                     if key in newParameters:
                         if any(t is not None and t==timeDate for t,_ in newParameters[key]):
