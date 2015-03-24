@@ -29,6 +29,50 @@ class fromCmdLine(unittest.TestCase):
         self.assertEqual(s.getValue("a", datetime.datetime(2014,1,1)), 3)
                 
 
+class timeConversion(unittest.TestCase):
+    
+    def testConv1(self):
+        
+        theDate=datetime.datetime(2014, 7, 1, 0,0,0,0)
+        
+        self.assertEqual(scenario.stringToDate('20140701'), theDate)
+        self.assertEqual(scenario.stringToDate('20140701 00:00:00'), theDate)
+        self.assertEqual(scenario.stringToDate('20140701 00:00:00.000'), theDate)
+
+    def testConv2(self):
+        
+        theDate=datetime.datetime(2014, 7, 1, 1,2,3,4000)
+        
+        self.assertEqual(scenario.stringToDate('20140701 01:02:03.004'), theDate)
+        self.assertEqual(scenario.stringToDate('20140701 01:02:03.0040'), theDate)
+        self.assertEqual(scenario.stringToDate('20140701 01:02:03.00400'), theDate)
+        self.assertEqual(scenario.stringToDate('20140701 01:02:03.004000'), theDate)
+        self.assertEqual(scenario.stringToDate('20140701 01:02:03.0040001'), theDate)
+        # here: truncate to microseconds precision
+        self.assertEqual(scenario.stringToDate('20140701 01:02:03.00399999'), theDate)
+
+        self.assertNotEqual(scenario.stringToDate('20140701 01:02:03.009'), theDate)
+        self.assertNotEqual(scenario.stringToDate('20140701 01:02:03.009'), theDate)
+        self.assertNotEqual(scenario.stringToDate('20140701 01:02:03.003999'), theDate)
+
+    def testFailedConvDate(self):
+        self.assertRaises(ValueError, scenario.stringToDate, '2014070')
+        self.assertRaises(ValueError, scenario.stringToDate, '201407010')
+        self.assertRaises(ValueError, scenario.stringToDate, '20140e01')
+        self.assertRaises(ValueError, scenario.stringToDate, '201d07010')
+
+    def testFailedConvTime(self):
+        self.assertRaises(ValueError, scenario.stringToDate, '20140701 ')
+        self.assertRaises(ValueError, scenario.stringToDate, '20140701 12:30:00d')
+        self.assertRaises(ValueError, scenario.stringToDate, '20140701 12.30.00')
+        self.assertRaises(ValueError, scenario.stringToDate, '20140701_12:30:00')
+
+    def testFailedConvMicrosec(self):
+        self.assertRaises(ValueError, scenario.stringToDate, '20140701 0.000')
+        self.assertRaises(ValueError, scenario.stringToDate, '20140701 12:30:00.0e')
+        self.assertRaises(ValueError, scenario.stringToDate, '20140701 12:30:00.3e6')
+        self.assertRaises(ValueError, scenario.stringToDate, '20140701 12:30:00.3e4')
+        self.assertRaises(ValueError, scenario.stringToDate, '20140701 12:30:00.0000ee')
 
 class loadJSON(unittest.TestCase):
     

@@ -9,6 +9,7 @@ this module provides class and functions to handle parameter sets/scenarios
 import json
 import datetime
 import bisect
+import tables
 
 from sqlalchemy import Column, String, DateTime, Integer, Enum
 from sqlalchemy.ext.declarative import declarative_base
@@ -23,7 +24,7 @@ class SQLscenario(SQLBase):
     experimentID=Column(String(32))
     name=Column(String(128))
     type_=Column(Enum("Int", "Float", "Bool"))
-    date = Column(DateTime(timezone=False), nullable=True)
+    theDate = Column(DateTime(timezone=False), nullable=True)
     value = Column(String(128))
 
 class scenario:
@@ -32,20 +33,161 @@ class scenario:
     
     def __init__(self):
         self.parameters={}
+        
+    @staticmethod
+    def dateToString(theDate):
+        datestr="{:04d}{:02d}{:02d}".format(theDate.year, theDate.month, theDate.day)
+        if type(theDate) is datetime.date:
+            return datestr
+        if theDate.hour!=0 or theDate.minute!=0 or theDate.second!=0 or theDate.microsecond!=0:
+            datestr+=" {:02d}:{:02d}:{:02d}".format(theDate.hour,theDate.minute,theDate.second)
+            if theDate.microsecond!=0:
+                datestr+=".{:06d}".format(theDate.microsecond).rstrip("0")
+        return datestr
+    
+    @staticmethod
+    def stringToDate(theDateString):
+        stringLen=len(theDateString)
+        if stringLen<8:
+            raise ValueError("expecting at least 8 digits for date without time")
+        theDate=datetime.datetime(year=int(theDateString[:4]),
+                                  month=int(theDateString[4:6]),
+                                  day=int(theDateString[6:8]))
+        if stringLen==8:
+            return theDate
+        if stringLen<17:
+            raise ValueError("expecting at least 18 digits for date without time")
+        if theDateString[8]!=' ':
+            raise ValueError("expecting space between date and time")
+        if theDateString[11]!=':' or theDateString[14]!=":":
+            raise ValueError("expecting colons between hours, minutes and seconds")
+        theDate=theDate.replace(hour=int(theDateString[9:11]),
+                                minute=int(theDateString[12:14]),
+                                second=int(theDateString[15:17]))
+        if stringLen==17:
+            return theDate
+        if theDateString[17]!='.':
+            raise ValueError('expecting . after seconds')
+        if any(l not in "0123456789" for l in theDateString[18:]):
+            raise ValueError("expecting only digits for fraction of seconds spec")
+        return theDate.replace(microsecond=int(round(float('0.'+theDateString[18:])*1e6)))
 
+    class scenarioHDFTable(tables.IsDescription):
+        name   = tables.StringCol(128, pos=1)  #@UndefinedVariable
+        date   = tables.StringCol(32, pos=2) #@UndefinedVariable
+        type   = tables.EnumCol(enum=tables.Enum({'Int':0, 'Float':1, 'Bool':2}),#@UndefinedVariable
+                                dflt='Float', 
+                                base=tables.IntAtom(),
+                                pos=3) #@UndefinedVariable
+        # sadly this is the 'union' for all types
+        value  = tables.StringCol(64, pos=4) #@UndefinedVariable
+
+    def writeToHDF(self, hdfGroup, name='scenario'):
+        # creates a table in the hdfGroup with the given name
+        if type(hdfGroup) is tables.Table:
+            newTable=hdfGroup
+            # todo: some checks
+            if set(newTable.colnames)!=set(["name", "date", "type", "value"]):
+                raise ValueError("tables incompatible")
+        elif name in hdfGroup:
+            # reads from table given by name
+            newTable=hdfGroup._f_get_child(name)            
+            if set(newTable.colnames)!=set(["name", "date", "type", "value"]):
+                raise ValueError("tables incompatible")
+        else:
+            newTable=tables.Table(parentnode=hdfGroup,
+                                  name=name,
+                                  description=self.scenarioHDFTable)
+        theRow=newTable.row
+        
+        for name, (dates,values) in self.parameters.items():
+            for theDate, value in zip(dates, values):
+                nameEnc=theRow["name"]=name.encode()
+                if len(nameEnc)>128:
+                    raise ValueError("encoded string too long")
+                theRow["type"]={int:  0,
+                                float: 1,
+                                bool:  2}[type(values[0])]
+                if theDate is None:
+                    theRow["date"]=""
+                else:
+                    theRow["date"]=self.dateToString(theDate)
+                theRow["value"]=str(value).encode()
+                theRow.append()
+        newTable.close()
+    
+    def readFromHDF(self, hdfGroup, name='scenario'):
+        if type(hdfGroup) is tables.Table:
+            # this is the table...
+            theTable=hdfGroup
+        else:
+            # reads from table given by name
+            theTable=hdfGroup._f_get_child(name)
+        
+        newParams={}
+        
+        for row in theTable:
+            theName=row["name"].decode('utf-8')
+            theDate=row["date"].decode('utf-8')
+            if theDate=='':
+                theDate=None
+            else:
+                theDate=self.stringToDate(theDate)
+            theValue=row["value"].decode('utf-8')
+            theType=row["type"]
+            if theType==0:
+                theValue=int(theValue)
+            elif theType==1:
+                theValue=float(theValue)
+            elif theType==2:
+                theValue={'True': True, 'False': False,
+                          'true': True, 'false': False,
+                          '0': False, '1': True}[theValue]
+            else:
+                raise ValueError('unknown type code in HDF table')
+
+            if theName not in newParams:
+                d, v=newParams[theName]=([],[])
+            else:
+                d, v=newParams[theName]
+            if theDate in d:
+                raise ValueError("duplicate date")
+            d.append(theDate)
+            v.append(theValue)
+
+        # now sort
+        newParams2={}
+        for k, (d,v) in newParams.items():
+            # check for default value
+            if None not in d:
+                raise ValueError('no default value for '+k)
+            dateValueDict=dict(zip(d,v))
+            d.remove(None)
+            d.sort()
+            d.insert(0, None)
+
+            # make sure value type is consistent
+            theType=type(dateValueDict[None])
+            if any(type(val) is not theType for val in dateValueDict.values()):
+                raise ValueError('inconsistent type for '+k)
+
+            newParams2[k]=(d,[dateValueDict[val] for val in d])
+        
+        self.parameters=newParams2
+            
     def readFromMySQL(self, session, experimentID=None):
         # get a cursor, get a uuid or so...
         
         if experimentID is None:
             # do not filter
-            scenarios=session.query(SQLscenario.name, SQLscenario.date, SQLscenario.type_, SQLscenario.value).all()
+            scenarios=session.query(SQLscenario.name, SQLscenario.theDate, SQLscenario.type_, SQLscenario.value).all()
         elif type(experimentID) is str:
-            scenarios=session.query(SQLscenario.name, SQLscenario.date, SQLscenario.type_,  SQLscenario.value).filter(SQLscenario.experimentID==experimentID).all()
+            scenarios=session.query(SQLscenario.name, SQLscenario.theDate, SQLscenario.type_,  SQLscenario.value).filter(SQLscenario.experimentID==experimentID).all()
         else:
-            scenarios=session.query(SQLscenario.name, SQLscenario.date, SQLscenario.type_,  SQLscenario.value).filter(SQLscenario.experimentID==experimentID.hex).all()
+            scenarios=session.query(SQLscenario.name, SQLscenario.theDate, SQLscenario.type_,  SQLscenario.value).filter(SQLscenario.experimentID==experimentID.hex).all()
 
         newParameters={}
-        for name, date, type_, value in scenarios:
+        for name, theDate, type_, value in scenarios:
             
             if type_.lower()=="float":
                 value=float(value)
@@ -57,7 +199,7 @@ class scenario:
                 raise ValueError("unknown type specification '{}'".format(type_))
             
             # oh what about the default parameter?!
-            if date is None:
+            if theDate is None:
                 if name in newParameters:
                     newParameters[name].insert(0,(None, value))
                 else:
@@ -65,9 +207,9 @@ class scenario:
 
             else:
                 if name in newParameters:
-                    newParameters[name].append((date, value))
+                    newParameters[name].append((theDate, value))
                 else:
-                    newParameters[name]=[(date, value),]
+                    newParameters[name]=[(theDate, value),]
         
         for key in list(newParameters.keys()):
             theValues=newParameters[key]
@@ -98,7 +240,7 @@ class scenario:
             theType={int: "int", float:"float", bool:"bool"}[type(values[1][0])]
             session.add_all([SQLscenario(name=name, type_=theType,
                                          experimentID=expID,
-                                         date=d,
+                                         theDate=d,
                                          value=str(v)) for d,v in zip(*values)])
         session.commit()
         
@@ -156,24 +298,15 @@ class scenario:
         # success
         self.parameters=newParameters
     
-    def parseTime(self, t, key="?"):
-        if type(t) is not str or len(t)<8:
-            raise ValueError("unexpected/invalid time definition in {:s}".format(key))
+    def parseTime(self, t, key=None):
 
-        # collect date
-        timeDate=datetime.datetime(year=int(t[:4]), month=int(t[4:6]), day=int(t[6:8]))
-       
-        if len(t)>8:
-            if len(t)<17 or t[8]!=" " or t[11]!=":" or t[14]!=":":
-                raise ValueError("invalid time definition in {:s}".format(key))
-            timeDate=timeDate.replace(hour=int(t[9:11]), minute=int(t[12:14]), second=int(t[15:17]))
-
-        if len(t)>17:
-            if t[17]!=".":
-                raise ValueError("invalid time definition in {:s}".format(key))
-            timeDate=timeDate.replace(microsecond=int(float("0"+t[17:])*1e6))
-
-        return timeDate
+        try:
+            return self.stringToDate(t)
+        except ValueError as e:
+            if key:
+                raise ValueError(str(e)+' from '+key)
+            else:
+                raise
     
     def writeToCmdLine(self):
         args=[]
@@ -222,7 +355,7 @@ class scenario:
                     else:
                         newParameters[key]=[(None, value)]
                 else:
-                    # expect date and time
+                    # expect theDate and time
                     timeDate=self.parseTime(valueType, key)
                     if key in newParameters:
                         if any(t is not None and t==timeDate for t,_ in newParameters[key]):
