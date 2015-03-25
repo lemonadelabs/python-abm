@@ -11,6 +11,7 @@ import numpy
 
 from ABM.reporting import offloadedReporting
 from ABM import fsmAgent
+from ABM.scenario import scenario
 
 class HDFLoggingProcess(Process):
 
@@ -84,6 +85,9 @@ class HDFLoggingProcess(Process):
                         
                         parameterTable.close()
                         del parameterRow, parameterTable
+                    elif type(parameters) is scenario:
+                        print("writing scenarios")
+                        parameters.writeToHDF(theFile.root, 'scenario')
                     else:
                         print("unsupported type: {}".format(type(parameters)))
         

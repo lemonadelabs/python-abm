@@ -7,6 +7,7 @@ Created on 8/12/2014
 import unittest
 from ABM import scenario
 import datetime
+import json
 
 class fromCmdLine(unittest.TestCase):
     
@@ -27,7 +28,6 @@ class fromCmdLine(unittest.TestCase):
         self.assertEqual(s.getValue("a", datetime.datetime(2013,1,1, 0, 30)), 2)
         self.assertEqual(s.getValue("a", datetime.datetime(2013,1,2)),3)
         self.assertEqual(s.getValue("a", datetime.datetime(2014,1,1)), 3)
-                
 
 class timeConversion(unittest.TestCase):
     
@@ -54,6 +54,17 @@ class timeConversion(unittest.TestCase):
         self.assertNotEqual(scenario.stringToDate('20140701 01:02:03.009'), theDate)
         self.assertNotEqual(scenario.stringToDate('20140701 01:02:03.009'), theDate)
         self.assertNotEqual(scenario.stringToDate('20140701 01:02:03.003999'), theDate)
+
+    def testConv3(self):
+
+        self.assertEqual(scenario.dateToString(datetime.datetime(2014, 7, 1, 1, 2, 3, 4000)),
+                         '20140701 01:02:03.004')
+        
+        self.assertEqual(scenario.dateToString(datetime.datetime(2014, 7, 1, 1, 2, 3, 4)),
+                         '20140701 01:02:03.000004')
+
+        self.assertEqual(scenario.dateToString(datetime.datetime(2014, 7, 1, 1, 2, 3, 0)),
+                         '20140701 01:02:03')
 
     def testFailedConvDate(self):
         self.assertRaises(ValueError, scenario.stringToDate, '2014070')
@@ -91,6 +102,20 @@ class loadJSON(unittest.TestCase):
         s.readFromJSON("""{"a":1, "b":1.0, "c":true }""")
         
         self.assertDictEqual(s.parameters, {"a": [(None,),(1,)], "b": [(None,), (1.0,)], "c": [(None,), (True,)]})
+
+    def testSimpleDataRW(self):
+        s=scenario()
+        s.parameters={"a": ([None,], [1,]),
+                      "b": ([None,], [1.2,]),
+                      "c": ([None,], [True,])}
+        theJSON=s.writeToJSON()
+        
+        jsonStruct=json.loads(theJSON)
+        
+        self.assertSetEqual(set(jsonStruct.keys()), set(["a", "b", "c"]))
+        self.assertIs(type(jsonStruct["c"]), bool)
+        self.assertIn(type(jsonStruct["a"]), [float, int])
+        self.assertIs(type(jsonStruct["b"]), float)
 
     def testTimeFormats(self):
         s=scenario()

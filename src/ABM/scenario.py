@@ -74,13 +74,14 @@ class scenario:
 
     class scenarioHDFTable(tables.IsDescription):
         name   = tables.StringCol(128, pos=1)  #@UndefinedVariable
-        date   = tables.StringCol(32, pos=2) #@UndefinedVariable
+        date   = tables.StringCol(26, pos=2) #@UndefinedVariable
         type   = tables.EnumCol(enum=tables.Enum({'Int':0, 'Float':1, 'Bool':2}),#@UndefinedVariable
                                 dflt='Float', 
                                 base=tables.IntAtom(),
                                 pos=3) #@UndefinedVariable
         # sadly this is the 'union' for all types
-        value  = tables.StringCol(64, pos=4) #@UndefinedVariable
+        # expected max length: float 22, bool: 5, int: well as long as it gets
+        value  = tables.StringCol(32, pos=4) #@UndefinedVariable
 
     def writeToHDF(self, hdfGroup, name='scenario'):
         # creates a table in the hdfGroup with the given name
@@ -104,7 +105,7 @@ class scenario:
             for theDate, value in zip(dates, values):
                 nameEnc=theRow["name"]=name.encode()
                 if len(nameEnc)>128:
-                    raise ValueError("encoded string too long")
+                    raise ValueError("(encoded) name string too long")
                 theRow["type"]={int:  0,
                                 float: 1,
                                 bool:  2}[type(values[0])]
@@ -112,7 +113,9 @@ class scenario:
                     theRow["date"]=""
                 else:
                     theRow["date"]=self.dateToString(theDate)
-                theRow["value"]=str(value).encode()
+                valueEnc=theRow["value"]=str(value).encode()
+                if len(valueEnc)>32:
+                    raise ValueError("value string representation too long")
                 theRow.append()
         newTable.close()
     
@@ -243,10 +246,28 @@ class scenario:
                                          date=d,
                                          value=str(v)) for d,v in zip(*values)])
         session.commit()
-        
+    
+    def writeToJSON(self):
+        jsonScenario={}
+        for name, (dates,values) in self.parameters.items():
+            if len(dates)==1:
+                timeSeries=values[0]
+            elif dates==[]:
+                raise ValueError("found empty time series for {:s}".format(name))
+            else:
+                timeSeries={}
+                for theDate, value in zip(dates, values):
+                    if theDate is None:
+                        timeSeries["initial"]=value
+                    else:
+                        timeSeries[self.dateToString(theDate)]=["set", value]
+
+            jsonScenario[name]=timeSeries
+
+        return json.dumps(jsonScenario)
+    
     def readFromJSON(self, jsonString):
         # JSON doesn't distinguish reliably between integers and floats
-        
         newParameters={}
         
         data=json.loads(jsonString)
@@ -317,12 +338,7 @@ class scenario:
                     valueType={int:"int", float: "float", bool:"bool"}[type(value)]
                     args.append("--param={:s},{:s},{:s}".format(name, valueType, str(value)))
                 else:
-                    dateStr="{:04d}{:02d}{:02d}".format(time.year, time.month, time.day)
-                    if time.time()!=datetime.time():
-                        dateStr+=" {:02d}:{:02d}:{:02d}".format(time.hour, time.minute, time.second)
-                        if time.microsecond!=0:
-                            dateStr+=".{:06d}".format(int(time.microsecond*1e6))
-                    args.append("--param={:s},{:s},{:s}".format(name, dateStr, str(value)))
+                    args.append("--param={:s},{:s},{:s}".format(name, self.dateToString(time), str(value)))
         
         return args
     
