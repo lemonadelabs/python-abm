@@ -84,7 +84,8 @@ class offloadedReporting:
                 print("pipe", p, "is broken, removing from output pipes")
                 brokenPipes.append(p)
         for p in brokenPipes:
-            self.outputPipes.remove(p)
+            if p in self.outputPipes:
+                self.outputPipes.remove(p)
 
     def registerTransitionTable(self, agent, extraParameterTypes={}, stateNames=None):
         # see whether this is already registered
