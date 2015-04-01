@@ -398,6 +398,8 @@ class scenario:
         self.parameters=newParameters
     
     def getValue(self, name, time):
+        if type(time) is datetime.date:
+            time=datetime.datetime(year=time.year, month=time.month, day=time.day)
         param=self.parameters[name]
         paramLen=len(param[0])
         if paramLen<2:
