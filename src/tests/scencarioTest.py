@@ -103,6 +103,21 @@ class loadJSON(unittest.TestCase):
         
         self.assertDictEqual(s.parameters, {"a": [(None,),(1,)], "b": [(None,), (1.0,)], "c": [(None,), (True,)]})
 
+    def testErrorMessages(self):
+        
+        s=scenario()
+        jsonString="""
+        {"onlineChannelAvailable_Adult_FirstTime":{"20190701":["set",1],"20200701":["set",1],"20210701":["set",1],"20220701":["set",1],
+        "20230701":["set",1],"20240701":["set",false],"initial":false}}
+        """
+        self.assertRaises(TypeError, s.readFromJSON, jsonString)
+
+        s=scenario()
+        jsonString="""
+        {"year1": 1, "year": {"20190701": 2}}
+        """
+        self.assertRaises(KeyError, s.readFromJSON, jsonString)
+
     def testSimpleDataRW(self):
         s=scenario()
         s.parameters={"a": ([None,], [1,]),

@@ -299,7 +299,7 @@ class scenario:
                         raise ValueError("unknown update command in {:s}".format(key))
 
                     if type(theValues[0][1]) is bool and type(value[t][1]) is not bool:
-                        raise TypeError("expecting consistent types")
+                        raise TypeError("expecting consistent boolean type in {:s}".format(key))
 
                     theValues.append((timeDate, value[t][1]))
             else:
