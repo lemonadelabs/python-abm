@@ -207,12 +207,6 @@ class offloadedHdfLogger(offloadedReporting):
 class hdfLogger:
     # no offloading here
 
-    class parameterTableFormat(tables.IsDescription):
-        # inherits the limits of the ABMsimulations.parameters table
-        varName=tables.StringCol(64) #@UndefinedVariable
-        varType=tables.EnumCol(tables.Enum(["INT", "FLOAT", "BOOL", "STR", "RUN"]), "STR", "uint8") #@UndefinedVariable
-        varValue=tables.StringCol(128) #@UndefinedVariable
-    
     def __init__(self, logFileName):
         
         self.speciesTables={}
@@ -276,41 +270,58 @@ class hdfLogger:
         if hasattr(self, "theFile"):
             self.theFile.close()
             del self.theFile
+    
+    def registerTransitionTable(self, agent, extraColumns={}, stateNames=None):
+        agentType=type(agent)
+        if agentType not in self.speciesTables:
+            # create agent table on the fly
+            # initialize the enum list
+            if stateNames is None:
+                stateNames=set(["start", "end"]) # default, must be there
+                for attr in dir(agent):
+                    nameSplit=attr.split("_")
+                    if len(nameSplit)>=2 and nameSplit[0] in ["enter", "leave", "activity"]:
+                        attr_object=getattr(agent, attr)
+                        attr_name="_".join(nameSplit[1:])
+                        if type(attr_object) is types.MethodType:
+                            stateNames.add(attr_name)
 
-    def reportTransition(self, agent, s1, s2, t1, t2):
+            stateNames=list(stateNames)
+            stateNames.sort()
+            self.speciesEnum[agentType]=stateEnum=tables.Enum(stateNames)
+            
+            descriptionDict={"timeStamp": tables.Float64Col(), # @UndefinedVariable
+                              "fromState": tables.EnumCol(stateEnum, "start", "uint16"), # @UndefinedVariable
+                              "toState": tables.EnumCol(stateEnum, "start", "uint16"), # @UndefinedVariable
+                              "dwellTime":tables.Float32Col(), # @UndefinedVariable
+                              "effort": tables.Float32Col(),   # @UndefinedVariable
+                              "agentId": tables.UInt64Col()}   # @UndefinedVariable
+
+            for k,v in extraColumns.items():
+                if type(v) is str:
+                    v=eval(v)
+                descriptionDict[k]=v
+            
+            transitions=type("transitions", (tables.IsDescription,), descriptionDict)  
+
+            theTable=self.theFile.create_table("/transitionLogs", agentType.__name__, transitions)
+            self.speciesTables[agentType]=theTable
+            self.speciesRows[agentType]=theTable.row
+            self.logMessage("allocated transition table for {:s}".format(agentType.__name__))
+        else:
+            # re-registering
+            pass
+        
+    def reportTransition(self, agent, s1, s2, t1, t2, **other):
         if not isinstance(agent, fsmAgent):
             raise TypeError("{:s} is not an fsmAgent".format(str(agent)))
 
         agentType=type(agent)
         if agentType not in self.speciesTables:
-            # create agent table on the fly
-            # initialize the enum list
-            stateNames=set(["start", "end"]) # default, must be there
-            for attr in dir(agent):
-                nameSplit=attr.split("_")
-                if len(nameSplit)>=2 and nameSplit[0] in ["enter", "leave", "activity"]:
-                    attr_object=getattr(agent, attr)
-                    attr_name="_".join(nameSplit[1:])
-                    if type(attr_object) is types.MethodType:
-                        stateNames.add(attr_name)
-
-            stateNames=list(stateNames)
-            stateNames.sort()
-            self.speciesEnum[agentType]=stateEnum=tables.Enum(stateNames)
-            transitions=type("transitions", (tables.IsDescription,), {"timeStamp": tables.Float64Col(), # @UndefinedVariable
-                                                                      "fromState": tables.EnumCol(stateEnum, "start", "uint16"), # @UndefinedVariable
-                                                                      "toState": tables.EnumCol(stateEnum, "start", "uint16"), # @UndefinedVariable
-                                                                      "dwellTime":tables.Float32Col(), # @UndefinedVariable
-                                                                      "effort": tables.Float32Col(),   # @UndefinedVariable
-                                                                      "agentId": tables.UInt64Col()})  # @UndefinedVariable
-
-            theTable=self.theFile.create_table("/transitionLogs", agentType.__name__, transitions)
-            self.speciesTables[agentType]=theTable
-            theTransition=self.speciesRows[agentType]=theTable.row
-            self.logMessage("allocated transition table for {:s}".format(agentType.__name__))
-        else:
-            stateEnum=self.speciesEnum[agentType]
-            theTransition=self.speciesRows[agentType]
+            self.registerTransitionTable(agent)
+            
+        stateEnum=self.speciesEnum[agentType]
+        theTransition=self.speciesRows[agentType]
             
         theTransition["agentId"]=agent.agentId
         theTransition["timeStamp"]=t2
@@ -318,6 +329,12 @@ class hdfLogger:
         theTransition["toState"]=stateEnum[s2 if s2 else "start"]
         theTransition["dwellTime"]=t2-t1
         theTransition["effort"]=agent.effort
+        # add the others
+        for name, value in other.items():
+            if type(value) is str:
+                value=numpy.array(value.encode(), dtype="S")
+            theTransition[name]=value
+        
         # fill in the values
         theTransition.append()
         del theTransition
