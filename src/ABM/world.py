@@ -38,9 +38,11 @@ class world:
 
         # topography:
         # some object making/handling coordinates and put them into relation to area, to each other
-        self.theTopography=None # future
-        # the logger
-        self.theLogger=None # near future
+        self.theTopology=None # future
+        # reference to the logger, if exists.
+        # used by reportTransition from fsmAgent
+        # classes availabe: hdfLogger or offloadedHdfLogger, offloadedReporting
+        self.theLogger=None
 
     def updateWallClock(self, newClock):
         """ only used by scheduler!
