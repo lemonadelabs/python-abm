@@ -231,32 +231,38 @@ class hdfLogger:
         # create a table for it?!
         # pretty much like a parameters table?!
         # or pickle an object?!
-        parameterTable=self.theFile.create_table("/", "parameters", hdfLogger.parameterTableFormat)
-        parameterRow=parameterTable.row
-        
-        varTypeEnum=parameterTable.coldescrs["varType"].enum
-        varTypeDict={int:   varTypeEnum["INT"],
-                     str:   varTypeEnum["STR"],
-                     float: varTypeEnum["FLOAT"],
-                     bool:  varTypeEnum["BOOL"]}
-        runType=varTypeEnum["RUN"]
-        
-        for k,v in parameters.items():
-            varType=varTypeDict[type(v)]
-            parameterRow["varName"]=str(k)
-            parameterRow["varType"]=varType
-            parameterRow["varValue"]=str(v)
-            parameterRow.append()
+        if type(parameters) is dict:
+            parameterTable=self.theFile.create_table("/", "parameters", hdfLogger.parameterTableFormat)
+            parameterRow=parameterTable.row
             
-        for k,v in runParameters.items():
-            parameterRow["varName"]=str(k)
-            parameterRow["varType"]=runType
-            parameterRow["varValue"]=str(v)
-            parameterRow.append()
-        
-        del parameterRow
-        parameterTable.close()
-        
+            varTypeEnum=parameterTable.coldescrs["varType"].enum
+            varTypeDict={int:   varTypeEnum["INT"],
+                         str:   varTypeEnum["STR"],
+                         float: varTypeEnum["FLOAT"],
+                         bool:  varTypeEnum["BOOL"]}
+            runType=varTypeEnum["RUN"]
+            
+            for k,v in parameters.items():
+                varType=varTypeDict[type(v)]
+                parameterRow["varName"]=str(k)
+                parameterRow["varType"]=varType
+                parameterRow["varValue"]=str(v)
+                parameterRow.append()
+                
+            for k,v in runParameters.items():
+                parameterRow["varName"]=str(k)
+                parameterRow["varType"]=runType
+                parameterRow["varValue"]=str(v)
+                parameterRow.append()
+            
+            del parameterRow
+            parameterTable.close()
+        elif type(parameters) is scenario:
+            print("writing scenarios")
+            parameters.writeToHDF(self.theFile.root, 'scenario')
+        else:
+            print("unsupported type: {}".format(type(parameters)))
+
     def __del__(self):
         if hasattr(self, "speciesRows"):
             del self.speciesRows
