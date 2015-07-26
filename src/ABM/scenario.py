@@ -301,13 +301,28 @@ class scenario:
                     if type(theValues[0][1]) is bool and type(value[t][1]) is not bool:
                         raise TypeError("expecting consistent boolean type in {:s}".format(key))
 
+                    # todo: check value type!
                     theValues.append((timeDate, value[t][1]))
             else:
                 if type(value) not in [int, float, bool]:
                     raise TypeError("unexpected value for {:s}".format(key))
                 theValues.append((None, value))
 
-            # clean up float/int mixture -> convert everything to float if one float found
+            # be very lenient towards JSON types coming from front-end
+            # if initial value is int or float, check for strings, convert them
+            if type(theValues[0][1]) in [int, float]:
+                valuesAsNumber = []
+                for t,v in theValues:
+                    if type(v) is str:
+                        if v.isdecimal():
+                            v = int(v)
+                        else:
+                            v = float(v)
+                    valuesAsNumber.append((t,v))
+                theValues = valuesAsNumber
+
+            # if at least one float found:
+            # clean up float/int mixture -> convert everything to float
             if any(type(v) is float for _,v in theValues):
                 theValues=[(t,float(v)) for t,v in theValues]
 
