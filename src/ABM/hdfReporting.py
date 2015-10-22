@@ -258,6 +258,15 @@ class hdfLogger:
     also no compression and no log rotation.
     """
 
+    transitionTableFilter = tables.Filters(
+                                complevel=9,
+                                complib="zlib",
+                                least_significant_digit=3)
+    """
+    this is the standard filter for the transition tables
+    (size reduction factor 5 to 6)
+    """
+
     def __init__(self, logFileName):
 
         self.speciesTables = {}
@@ -291,9 +300,11 @@ class hdfLogger:
         self.speciesTables = {}
         self.speciesRows = {}
         for agentType, tableDef in self.speciesTablesDef.items():
-            theTable = self.theFile.create_table("/transitionLogs",
-                                                 agentType.__name__,
-                                                 tableDef)
+            theTable = self.theFile.create_table(
+                                        "/transitionLogs",
+                                        agentType.__name__,
+                                        tableDef,
+                                        filters=self.transitionTableFilter)
             self.speciesTables[agentType] = theTable
             self.speciesRows[agentType] = theTable.row
 
@@ -421,9 +432,11 @@ class hdfLogger:
                                (tables.IsDescription,),
                                descriptionDict)
 
-            theTable = self.theFile.create_table("/transitionLogs",
-                                                 agentType.__name__,
-                                                 transitions)
+            theTable = self.theFile.create_table(
+                                        "/transitionLogs",
+                                        agentType.__name__,
+                                        transitions,
+                                        filters=self.transitionTableFilter)
             self.speciesTablesDef[agentType] = transitions
             self.speciesTables[agentType] = theTable
             self.speciesRows[agentType] = theTable.row
