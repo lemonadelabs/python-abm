@@ -275,7 +275,7 @@ class hdfLogger:
         self.initializeFile(logFileName)
 
         # overwrite this to activate log rotation
-        self.rotateNext = math.inf
+        self.rotateNext = float('inf')
 
     def initializeFile(self, logFileName):
         # driver="H5FD_CORE" - maybe driver solid state devs?
@@ -452,7 +452,7 @@ class hdfLogger:
         and sets the new file name for this log
         """
         # by default: no rotation
-        return math.inf, None
+        return float('inf'), None
 
     def reportTransition(self, agent, s1, s2, t1, t2, **other):
         if t2 >= self.rotateNext:
