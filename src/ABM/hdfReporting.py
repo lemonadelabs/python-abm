@@ -254,8 +254,6 @@ class offloadedHdfLogger(offloadedReporting):
 class hdfLogger:
     """
     the simple hdf file based transition logger (i.e. no offloading here)
-
-    also no compression and no log rotation.
     """
 
     transitionTableFilter = tables.Filters(
